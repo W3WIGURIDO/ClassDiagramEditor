@@ -1,0 +1,362 @@
+﻿<Window x:Class="ClassDiagramEditor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ClassDiagramEditor"
+        xmlns:controls="clr-namespace:ClassDiagramEditor.Controls"
+        mc:Ignorable="d"
+        Title="Class Diagram Editor - .NET 10.0" 
+        Height="850" 
+        Width="1600"
+        Background="#F0F0F0"
+        WindowState="Maximized">
+
+    <Window.Resources>
+        <!-- ツールバーボタンスタイル -->
+        <Style x:Key="ToolBarButtonStyle" TargetType="Button">
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#DDDDDD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E3F2FD"/>
+                    <Setter Property="BorderBrush" Value="#2196F3"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- サイドパネルボタンスタイル -->
+        <Style x:Key="SidePanelButtonStyle" TargetType="Button">
+            <Setter Property="Margin" Value="0,3"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1976D2"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- ツールバー -->
+            <RowDefinition Height="*"/>
+            <!-- メインコンテンツ -->
+            <RowDefinition Height="Auto"/>
+            <!-- ステータスバー -->
+        </Grid.RowDefinitions>
+
+        <!-- ツールバー -->
+        <Border Grid.Row="0" 
+                Background="White" 
+                BorderBrush="#DDDDDD" 
+                BorderThickness="0,0,0,1" 
+                Padding="8">
+            <WrapPanel>
+                <!-- ファイル操作 -->
+                <Label Content="📁 ファイル:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="5,0"/>
+                <Button Content="新規作成" Command="{Binding NewDiagramCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+                <Button Content="開く" Command="{Binding LoadCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+                <Button Content="保存" Command="{Binding SaveCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+                <Button Content="エクスポート" Command="{Binding ExportCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+
+                <Separator Width="1" Background="#DDDDDD" Margin="10,5"/>
+
+                <!-- 編集操作 -->
+                <Label Content="✏️ 編集:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="5,0"/>
+                <Button Content="◀ Undo" Command="{Binding UndoCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+                <Button Content="Redo ▶" Command="{Binding RedoCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+
+                <Separator Width="1" Background="#DDDDDD" Margin="10,5"/>
+
+                <!-- ズーム操作 -->
+                <Label Content="🔍 表示:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="5,0"/>
+                <Button Content="➕" Command="{Binding ZoomInCommand}" Style="{StaticResource ToolBarButtonStyle}" ToolTip="拡大"/>
+                <Button Content="➖" Command="{Binding ZoomOutCommand}" Style="{StaticResource ToolBarButtonStyle}" ToolTip="縮小"/>
+                <Button Content="100%" Command="{Binding ZoomResetCommand}" Style="{StaticResource ToolBarButtonStyle}" ToolTip="リセット"/>
+                <TextBlock Text="{Binding ZoomLevel, StringFormat={}{0:P0}}" 
+                           VerticalAlignment="Center" 
+                           Margin="8,0"
+                           FontWeight="Bold"
+                           FontSize="13"
+                           Foreground="#2196F3"/>
+            </WrapPanel>
+        </Border>
+
+        <!-- メインコンテンツ -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="240"/>
+                <!-- ツールボックス -->
+                <ColumnDefinition Width="*"/>
+                <!-- キャンバス -->
+                <ColumnDefinition Width="340"/>
+                <!-- プロパティ -->
+            </Grid.ColumnDefinitions>
+
+            <!-- 左パネル: ツールボックス -->
+            <Border Grid.Column="0" 
+                    Background="White" 
+                    BorderBrush="#DDDDDD" 
+                    BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <TextBlock Text="🛠️ ツールボックス" 
+                                   FontSize="16" 
+                                   FontWeight="Bold" 
+                                   Margin="0,0,0,15"
+                                   Foreground="#333333"/>
+
+                        <!-- クラス追加 -->
+                        <TextBlock Text="クラス追加" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,5,0,8"
+                                   FontSize="13"
+                                   Foreground="#666666"/>
+                        <Button Content="📦 クラス" 
+                                Command="{Binding AddClassCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="🔷 インターフェース" 
+                                Command="{Binding AddInterfaceCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="📐 抽象クラス" 
+                                Command="{Binding AddAbstractClassCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+
+                        <!-- 関係追加 -->
+                        <TextBlock Text="関係追加" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,25,0,8"
+                                   FontSize="13"
+                                   Foreground="#666666"/>
+                        <Button Content="⬆️ 継承" 
+                                Command="{Binding AddInheritanceCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="🔸 実装" 
+                                Command="{Binding AddImplementationCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="↔️ 関連" 
+                                Command="{Binding AddAssociationCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="⤴️ 依存" 
+                                Command="{Binding AddDependencyCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+
+                        <!-- 編集 -->
+                        <TextBlock Text="編集" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,25,0,8"
+                                   FontSize="13"
+                                   Foreground="#666666"/>
+                        <Button Content="🗑️ 削除" 
+                                Command="{Binding DeleteSelectedCommand}" 
+                                Margin="0,3" 
+                                Padding="10,8"
+                                Background="#F44336"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                FontSize="13"
+                                HorizontalContentAlignment="Left">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="IsEnabled" Value="True"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#D32F2F"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- 中央パネル: キャンバス -->
+            <Border Grid.Column="1" Background="#FAFAFA">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" 
+                              VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <Grid.LayoutTransform>
+                            <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
+                        </Grid.LayoutTransform>
+
+                        <controls:DiagramCanvas x:Name="DiagramCanvas" 
+                                                Width="3000" 
+                                                Height="3000"
+                                                DataContext="{Binding}"
+                                                ClipToBounds="True">
+                            <controls:DiagramCanvas.Background>
+                                <DrawingBrush TileMode="Tile" Viewport="0,0,25,25" ViewportUnits="Absolute">
+                                    <DrawingBrush.Drawing>
+                                        <GeometryDrawing>
+                                            <GeometryDrawing.Geometry>
+                                                <GeometryGroup>
+                                                    <LineGeometry StartPoint="0,0" EndPoint="0,25"/>
+                                                    <LineGeometry StartPoint="0,0" EndPoint="25,0"/>
+                                                </GeometryGroup>
+                                            </GeometryDrawing.Geometry>
+                                            <GeometryDrawing.Pen>
+                                                <Pen Brush="#E0E0E0" Thickness="0.5"/>
+                                            </GeometryDrawing.Pen>
+                                        </GeometryDrawing>
+                                    </DrawingBrush.Drawing>
+                                </DrawingBrush>
+                            </controls:DiagramCanvas.Background>
+                        </controls:DiagramCanvas>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <!-- 右パネル: プロパティ -->
+            <Border Grid.Column="2" 
+                    Background="White" 
+                    BorderBrush="#DDDDDD" 
+                    BorderThickness="1,0,0,0">
+                <Grid Margin="15">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" 
+                               Text="⚙️ プロパティ" 
+                               FontSize="16" 
+                               FontWeight="Bold" 
+                               Margin="0,0,0,15"
+                               Foreground="#333333"/>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel DataContext="{Binding SelectedClass}">
+                            <!-- 未選択時 -->
+                            <Border Background="#FFF9C4" 
+                                    Padding="12" 
+                                    CornerRadius="4"
+                                    Visibility="{Binding Converter={StaticResource NullToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="💡" FontSize="20" HorizontalAlignment="Center" Margin="0,0,0,5"/>
+                                    <TextBlock Text="クラスを選択してください" 
+                                               TextWrapping="Wrap"
+                                               Foreground="#666666"
+                                               HorizontalAlignment="Center"
+                                               FontSize="12"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- クラス選択時 -->
+                            <StackPanel Visibility="{Binding Converter={StaticResource NotNullToVisibilityConverter}}">
+                                <!-- クラス名 -->
+                                <TextBlock Text="クラス名" FontWeight="SemiBold" Margin="0,5,0,5" FontSize="13"/>
+                                <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" 
+                                         Padding="8" 
+                                         FontSize="13"
+                                         BorderBrush="#CCCCCC"/>
+
+                                <!-- 種類 -->
+                                <TextBlock Text="種類" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
+                                <ComboBox SelectedIndex="{Binding Type}" 
+                                          Padding="8" 
+                                          FontSize="13"
+                                          BorderBrush="#CCCCCC">
+                                    <ComboBoxItem Content="クラス"/>
+                                    <ComboBoxItem Content="インターフェース"/>
+                                    <ComboBoxItem Content="抽象クラス"/>
+                                </ComboBox>
+
+                                <!-- 属性 -->
+                                <TextBlock Text="属性" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
+                                <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
+                                    <ListBox ItemsSource="{Binding Attributes}" 
+                                             Height="150"
+                                             BorderThickness="0"
+                                             Background="White">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayText}" 
+                                                           FontFamily="Consolas"
+                                                           FontSize="12"
+                                                           Padding="3"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+                                <Button Content="➕ 属性を追加" 
+                                        Margin="0,8,0,0" 
+                                        Padding="8"
+                                        Click="AddAttribute_Click"
+                                        Background="#4CAF50"
+                                        Foreground="White"
+                                        BorderThickness="0"
+                                        Cursor="Hand"
+                                        FontSize="12"/>
+
+                                <!-- メソッド -->
+                                <TextBlock Text="メソッド" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
+                                <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
+                                    <ListBox ItemsSource="{Binding Methods}" 
+                                             Height="150"
+                                             BorderThickness="0"
+                                             Background="White">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DisplayText}" 
+                                                           FontFamily="Consolas"
+                                                           FontSize="12"
+                                                           Padding="3"/>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </Border>
+                                <Button Content="➕ メソッドを追加" 
+                                        Margin="0,8,0,0" 
+                                        Padding="8"
+                                        Click="AddMethod_Click"
+                                        Background="#4CAF50"
+                                        Foreground="White"
+                                        BorderThickness="0"
+                                        Cursor="Hand"
+                                        FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ステータスバー -->
+        <Border Grid.Row="2" 
+                Background="#2196F3" 
+                Padding="12,8">
+            <Grid>
+                <TextBlock Text="{Binding StatusMessage}" 
+                           Foreground="White"
+                           FontSize="13"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text=".NET 10.0 | Self-contained" 
+                           Foreground="#E3F2FD"
+                           FontSize="11"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
