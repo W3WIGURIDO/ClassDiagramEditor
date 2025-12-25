@@ -1,4 +1,4 @@
-# ClassDiagramEditor
+# まだ使用不可
 # Class Diagram Editor
 
 **WPF + C# + .NET 10.0** で構築されたUMLクラス図作成ソフトウェア
