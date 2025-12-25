@@ -83,7 +83,7 @@ public class DiagramCanvas : Canvas
 
     private void AddClassVisual(ClassModel classModel)
     {
-        var visual = new ClassBoxVisual(classModel);
+        var visual = new ClassBoxVisual();
         _classVisuals[classModel.Id] = visual;
 
         classModel.PropertyChanged += (s, e) =>
@@ -152,6 +152,7 @@ public class DiagramCanvas : Canvas
         var sourceVisual = _classVisuals[source.Id];
         var targetVisual = _classVisuals[target.Id];
 
+        // クラスボックスの中心点
         var sourceCenter = new Point(
             source.Position.X + sourceVisual.Width / 2,
             source.Position.Y + sourceVisual.Height / 2
@@ -162,21 +163,68 @@ public class DiagramCanvas : Canvas
             target.Position.Y + targetVisual.Height / 2
         );
 
-        Pen pen = relation.Type switch
+        // クラスボックスの境界での接続点を計算
+        var sourceConnectionPoint = GetConnectionPoint(source.Position, sourceVisual.Width, sourceVisual.Height, sourceCenter, targetCenter);
+        var targetConnectionPoint = GetConnectionPoint(target.Position, targetVisual.Width, targetVisual.Height, targetCenter, sourceCenter);
+
+        // 線のスタイルと色を決定
+        Pen pen;
+        Brush arrowBrush;
+
+        switch (relation.Type)
         {
-            RelationType.Implementation or RelationType.Dependency =>
-                new Pen(Brushes.Black, 1.5) { DashStyle = DashStyles.Dash },
-            _ => new Pen(Brushes.Black, 1.5)
-        };
+            case RelationType.Inheritance:
+                // 継承: 実線 + 白抜き三角
+                pen = new Pen(Brushes.Black, 2);
+                arrowBrush = Brushes.White;
+                break;
 
-        dc.DrawLine(pen, sourceCenter, targetCenter);
-        DrawArrowHead(dc, relation.Type, sourceCenter, targetCenter);
+            case RelationType.Implementation:
+                // 実装: 破線 + 白抜き三角
+                pen = new Pen(Brushes.Black, 2) { DashStyle = DashStyles.Dash };
+                arrowBrush = Brushes.White;
+                break;
 
+            case RelationType.Association:
+                // 関連: 実線のみ（矢印なし、または必要に応じて開いた矢印）
+                pen = new Pen(Brushes.Black, 1.5);
+                arrowBrush = Brushes.Black;
+                break;
+
+            case RelationType.Dependency:
+                // 依存: 破線 + 開いた矢印
+                pen = new Pen(Brushes.Black, 1.5) { DashStyle = DashStyles.Dash };
+                arrowBrush = Brushes.Black;
+                break;
+
+            default:
+                pen = new Pen(Brushes.Black, 1.5);
+                arrowBrush = Brushes.Black;
+                break;
+        }
+
+        // 線を描画（接続点間を結ぶ）
+        dc.DrawLine(pen, sourceConnectionPoint, targetConnectionPoint);
+
+        // 矢印を描画
+        if (relation.Type == RelationType.Association)
+        {
+            // 関連: 両端に矢印を描画
+            DrawArrowHead(dc, relation.Type, targetConnectionPoint, sourceConnectionPoint, arrowBrush); // ソース側の矢印
+            DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush); // ターゲット側の矢印
+        }
+        else
+        {
+            // 継承・実装・依存: ターゲット側のみ矢印
+            DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush);
+        }
+
+        // ラベルを描画
         if (!string.IsNullOrEmpty(relation.Label))
         {
             var midPoint = new Point(
-                (sourceCenter.X + targetCenter.X) / 2,
-                (sourceCenter.Y + targetCenter.Y) / 2
+                (sourceConnectionPoint.X + targetConnectionPoint.X) / 2,
+                (sourceConnectionPoint.Y + targetConnectionPoint.Y) / 2
             );
 
             var formattedText = new FormattedText(
@@ -193,23 +241,85 @@ public class DiagramCanvas : Canvas
         }
     }
 
-    private void DrawArrowHead(DrawingContext dc, RelationType type, Point start, Point end)
+    /// <summary>
+    /// クラスボックスの境界上の接続点を計算
+    /// </summary>
+    private Point GetConnectionPoint(Point boxPosition, double boxWidth, double boxHeight, Point fromCenter, Point toCenter)
+    {
+        // ボックスの中心からターゲットへの方向ベクトル
+        var dx = toCenter.X - fromCenter.X;
+        var dy = toCenter.Y - fromCenter.Y;
+
+        // 角度を計算
+        var angle = Math.Atan2(dy, dx);
+
+        // ボックスの半分のサイズ
+        var halfWidth = boxWidth / 2;
+        var halfHeight = boxHeight / 2;
+
+        // 接続点を決定（上下左右の4辺のうち、どの辺に接続するか）
+        Point connectionPoint;
+
+        // 角度に基づいて接続する辺を決定
+        var absAngle = Math.Abs(angle);
+        var threshold = Math.Atan2(halfHeight, halfWidth);
+
+        if (absAngle < threshold)
+        {
+            // 右辺に接続
+            connectionPoint = new Point(
+                boxPosition.X + boxWidth,
+                fromCenter.Y
+            );
+        }
+        else if (absAngle > Math.PI - threshold)
+        {
+            // 左辺に接続
+            connectionPoint = new Point(
+                boxPosition.X,
+                fromCenter.Y
+            );
+        }
+        else if (angle > 0)
+        {
+            // 下辺に接続
+            connectionPoint = new Point(
+                fromCenter.X,
+                boxPosition.Y + boxHeight
+            );
+        }
+        else
+        {
+            // 上辺に接続
+            connectionPoint = new Point(
+                fromCenter.X,
+                boxPosition.Y
+            );
+        }
+
+        return connectionPoint;
+    }
+
+    private void DrawArrowHead(DrawingContext dc, RelationType type, Point start, Point end, Brush arrowBrush)
     {
         var angle = Math.Atan2(end.Y - start.Y, end.X - start.X);
-        const double arrowSize = 12;
+        const double arrowSize = 15;
+        const double arrowAngle = Math.PI / 7; // 約25度
 
         if (type is RelationType.Inheritance or RelationType.Implementation)
         {
+            // 継承・実装: 白抜き三角形（▷）
             var arrowPoint1 = end;
             var arrowPoint2 = new Point(
-                end.X - arrowSize * Math.Cos(angle - Math.PI / 6),
-                end.Y - arrowSize * Math.Sin(angle - Math.PI / 6)
+                end.X - arrowSize * Math.Cos(angle - arrowAngle),
+                end.Y - arrowSize * Math.Sin(angle - arrowAngle)
             );
             var arrowPoint3 = new Point(
-                end.X - arrowSize * Math.Cos(angle + Math.PI / 6),
-                end.Y - arrowSize * Math.Sin(angle + Math.PI / 6)
+                end.X - arrowSize * Math.Cos(angle + arrowAngle),
+                end.Y - arrowSize * Math.Sin(angle + arrowAngle)
             );
 
+            // 三角形を作成
             var triangleGeometry = new StreamGeometry();
             using (var ctx = triangleGeometry.Open())
             {
@@ -218,22 +328,47 @@ public class DiagramCanvas : Canvas
                 ctx.LineTo(arrowPoint3, true, false);
             }
 
-            dc.DrawGeometry(Brushes.White, new Pen(Brushes.Black, 1.5), triangleGeometry);
+            // 白抜き三角形を描画（内側が白、外側が黒線）
+            dc.DrawGeometry(arrowBrush, new Pen(Brushes.Black, 2), triangleGeometry);
         }
-        else
+        else if (type == RelationType.Dependency)
         {
+            // 依存: 開いた矢印（→）
             var arrowPoint1 = new Point(
-                end.X - arrowSize * Math.Cos(angle - Math.PI / 6),
-                end.Y - arrowSize * Math.Sin(angle - Math.PI / 6)
+                end.X - arrowSize * Math.Cos(angle - arrowAngle),
+                end.Y - arrowSize * Math.Sin(angle - arrowAngle)
             );
             var arrowPoint2 = new Point(
-                end.X - arrowSize * Math.Cos(angle + Math.PI / 6),
-                end.Y - arrowSize * Math.Sin(angle + Math.PI / 6)
+                end.X - arrowSize * Math.Cos(angle + arrowAngle),
+                end.Y - arrowSize * Math.Sin(angle + arrowAngle)
             );
 
             var pen = new Pen(Brushes.Black, 1.5);
             dc.DrawLine(pen, end, arrowPoint1);
             dc.DrawLine(pen, end, arrowPoint2);
+        }
+        else if (type == RelationType.Association)
+        {
+            bool enableAssociationArrow = false;
+            if ((enableAssociationArrow))
+            {
+
+                // 関連: 矢印なし（オプション: 開いた矢印を描画する場合）
+                // UML標準では関連に矢印は不要だが、方向性を示す場合は描画
+                var arrowPoint1 = new Point(
+                    end.X - arrowSize * 0.7 * Math.Cos(angle - arrowAngle),
+                    end.Y - arrowSize * 0.7 * Math.Sin(angle - arrowAngle)
+                );
+                var arrowPoint2 = new Point(
+                    end.X - arrowSize * 0.7 * Math.Cos(angle + arrowAngle),
+                    end.Y - arrowSize * 0.7 * Math.Sin(angle + arrowAngle)
+                );
+
+                var pen = new Pen(Brushes.Black, 1.5);
+                dc.DrawLine(pen, end, arrowPoint1);
+                dc.DrawLine(pen, end, arrowPoint2);
+
+            }
         }
     }
 
@@ -242,13 +377,27 @@ public class DiagramCanvas : Canvas
         if (_relationSourceClass == null) return;
 
         var sourceVisual = _classVisuals[_relationSourceClass.Id];
+
         var sourceCenter = new Point(
             _relationSourceClass.Position.X + sourceVisual.Width / 2,
             _relationSourceClass.Position.Y + sourceVisual.Height / 2
         );
 
+        // ソース側の接続点を計算
+        var sourceConnectionPoint = GetConnectionPoint(
+            _relationSourceClass.Position,
+            sourceVisual.Width,
+            sourceVisual.Height,
+            sourceCenter,
+            _currentMousePosition
+        );
+
+        // 一時的な線のスタイル
         var pen = new Pen(Brushes.Gray, 1.5) { DashStyle = DashStyles.Dot };
-        dc.DrawLine(pen, sourceCenter, _currentMousePosition);
+        dc.DrawLine(pen, sourceConnectionPoint, _currentMousePosition);
+
+        // 一時的な矢印も表示
+        DrawArrowHead(dc, _pendingRelationType, sourceConnectionPoint, _currentMousePosition, Brushes.LightGray);
     }
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -386,7 +535,7 @@ public class DiagramCanvas : Canvas
 /// <summary>
 /// クラスボックスの描画
 /// </summary>
-internal class ClassBoxVisual(ClassModel classModel)
+internal class ClassBoxVisual
 {
     private const double Padding = 10;
     private const double LineHeight = 20;

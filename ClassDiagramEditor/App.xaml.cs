@@ -23,7 +23,8 @@ public class NullToVisibilityConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        throw new NotImplementedException();
+        // 一方向バインディングのみサポート
+        return Binding.DoNothing;
     }
 }
 
@@ -39,6 +40,7 @@ public class NotNullToVisibilityConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        throw new NotImplementedException();
+        // 一方向バインディングのみサポート
+        return Binding.DoNothing;
     }
 }
