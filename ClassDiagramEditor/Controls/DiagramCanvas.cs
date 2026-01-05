@@ -30,6 +30,12 @@ public class DiagramCanvas : Canvas
     private RelationModel? _hoveredRelation;
     private const double RelationHitTestDistance = 8.0; // クリック検出範囲（ピクセル）
 
+
+    // 矩形選択用フィールド
+    private bool _isRectangleSelecting;
+    private Point _rectangleSelectionStart;
+    private Point _rectangleSelectionEnd;
+
     private readonly Dictionary<Guid, ClassBoxVisual> _classVisuals = [];
 
     public DiagramCanvas()
@@ -123,6 +129,12 @@ public class DiagramCanvas : Canvas
         {
             DrawTemporaryRelationLine(dc);
         }
+
+        // ← 矩形選択の描画
+        if (_isRectangleSelecting)
+        {
+            DrawSelectionRectangle(dc);
+        }
     }
 
     private void DrawClasses(DrawingContext dc)
@@ -132,7 +144,9 @@ public class DiagramCanvas : Canvas
             var classModel = _viewModel!.Diagram.Classes.FirstOrDefault(c => c.Id == kvp.Key);
             if (classModel != null)
             {
-                kvp.Value.Draw(dc, classModel);
+                // ← 複数選択対応
+                bool isSelected = _viewModel.IsClassSelected(classModel);
+                kvp.Value.Draw(dc, classModel, isSelected);
             }
         }
     }
@@ -452,6 +466,70 @@ public class DiagramCanvas : Canvas
         DrawArrowHead(dc, _pendingRelationType, sourceConnectionPoint, _currentMousePosition, Brushes.LightGray, Brushes.Gray);
     }
 
+
+    /// <summary>
+    /// 矩形選択範囲を描画
+    /// </summary>
+    private void DrawSelectionRectangle(DrawingContext dc)
+    {
+        var rect = GetSelectionRectangle();
+
+        // 半透明の青い塗りつぶし
+        var fillBrush = new SolidColorBrush(Color.FromArgb(50, 33, 150, 243));
+
+        // 破線の青い枠線
+        var pen = new Pen(Brushes.DodgerBlue, 2)
+        {
+            DashStyle = DashStyles.Dash
+        };
+
+        dc.DrawRectangle(fillBrush, pen, rect);
+    }
+
+
+    /// <summary>
+    /// 選択矩形を計算
+    /// </summary>
+    private Rect GetSelectionRectangle()
+    {
+        var x = Math.Min(_rectangleSelectionStart.X, _rectangleSelectionEnd.X);
+        var y = Math.Min(_rectangleSelectionStart.Y, _rectangleSelectionEnd.Y);
+        var width = Math.Abs(_rectangleSelectionEnd.X - _rectangleSelectionStart.X);
+        var height = Math.Abs(_rectangleSelectionEnd.Y - _rectangleSelectionStart.Y);
+
+        return new Rect(x, y, width, height);
+    }
+
+
+    /// <summary>
+    /// 矩形内のクラスを取得
+    /// </summary>
+    public List<ClassModel> GetClassesInRectangle(Rect selectionRect)
+    {
+        if (_viewModel == null) return new List<ClassModel>();
+
+        var selectedClasses = new List<ClassModel>();
+
+        foreach (var classModel in _viewModel.Diagram.Classes)
+        {
+            if (_classVisuals.TryGetValue(classModel.Id, out var visual))
+            {
+                var classRect = new Rect(
+                    classModel.Position,
+                    new Size(visual.Width, visual.Height)
+                );
+
+                // 矩形が交差または包含している場合
+                if (selectionRect.IntersectsWith(classRect))
+                {
+                    selectedClasses.Add(classModel);
+                }
+            }
+        }
+
+        return selectedClasses;
+    }
+
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_viewModel == null) return;
@@ -485,16 +563,42 @@ public class DiagramCanvas : Canvas
         {
             if (clickedClass != null)
             {
-                _viewModel.SelectedClass = clickedClass;
+                // Ctrlキー判定
+                bool isCtrlPressed = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+
+                if (isCtrlPressed)
+                {
+                    // Ctrl+クリック: 選択を追加/削除
+                    _viewModel.ToggleClassSelection(clickedClass);
+                }
+                else if (!_viewModel.IsClassSelected(clickedClass))
+                {
+                    // 通常クリック: 単一選択
+                    _viewModel.SelectSingleClass(clickedClass);
+                }
+
                 _draggingClass = clickedClass;
                 _dragStartPoint = clickPoint;
                 _dragStartPosition = clickedClass.Position;
                 _isDragging = false;
                 CaptureMouse();
+                InvalidateVisual();
             }
             else
             {
-                _viewModel.SelectedClass = null;
+                // 空白部分クリック: 矩形選択開始
+                bool isCtrlPressed = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+
+                if (!isCtrlPressed)
+                {
+                    _viewModel.ClearSelection();
+                }
+
+                _isRectangleSelecting = true;
+                _rectangleSelectionStart = clickPoint;
+                _rectangleSelectionEnd = clickPoint;
+                CaptureMouse();
+                InvalidateVisual();
             }
         }
     }
@@ -531,7 +635,8 @@ public class DiagramCanvas : Canvas
     {
         _currentMousePosition = e.GetPosition(this);
 
-        if (!_isDragging && !_isAddingRelation)
+        // 関係線のホバー検出
+        if (!_isDragging && !_isAddingRelation && !_isRectangleSelecting)
         {
             var previousHovered = _hoveredRelation;
             _hoveredRelation = GetRelationAtPoint(_currentMousePosition);
@@ -547,6 +652,17 @@ public class DiagramCanvas : Canvas
         {
             InvalidateVisual();
         }
+        // 矩形選択中の処理
+        else if (_isRectangleSelecting && e.LeftButton == MouseButtonState.Pressed)
+        {
+            _rectangleSelectionEnd = _currentMousePosition;
+
+            // 矩形内のクラスを選択
+            var selectionRect = GetSelectionRectangle();
+            _viewModel.SelectClassesInRectangle(selectionRect, _classVisuals);
+
+            InvalidateVisual();
+        }
         else if (_draggingClass != null && e.LeftButton == MouseButtonState.Pressed)
         {
             var currentPoint = e.GetPosition(this);
@@ -559,24 +675,84 @@ public class DiagramCanvas : Canvas
 
             if (_isDragging)
             {
-                var newPosition = new Point(
-                    Math.Max(0, _dragStartPosition.X + offset.X),
-                    Math.Max(0, _dragStartPosition.Y + offset.Y)
-                );
+                // ← 複数選択されている場合はすべて移動
+                if (_viewModel.IsClassSelected(_draggingClass))
+                {
+                    foreach (var selectedClass in _viewModel.SelectedClasses)
+                    {
+                        var originalPos = selectedClass == _draggingClass
+                            ? _dragStartPosition
+                            : selectedClass.Position;
 
-                _draggingClass.Position = newPosition;
+                        var newPosition = new Point(
+                            Math.Max(0, originalPos.X + offset.X),
+                            Math.Max(0, originalPos.Y + offset.Y)
+                        );
+
+                        selectedClass.Position = newPosition;
+                    }
+                }
+                else
+                {
+                    var newPosition = new Point(
+                        Math.Max(0, _dragStartPosition.X + offset.X),
+                        Math.Max(0, _dragStartPosition.Y + offset.Y)
+                    );
+                    _draggingClass.Position = newPosition;
+                }
             }
         }
     }
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        // ← 矩形選択終了処理を追加
+        if (_isRectangleSelecting)
+        {
+            _isRectangleSelecting = false;
+            ReleaseMouseCapture();
+
+            var selectionRect = GetSelectionRectangle();
+            if (selectionRect.Width > 5 || selectionRect.Height > 5)
+            {
+                _viewModel.StatusMessage = $"{_viewModel.SelectedClasses.Count}個のクラスを選択";
+            }
+
+            InvalidateVisual();
+            return;
+        }
+
         if (_draggingClass != null && _isDragging)
         {
-            var newPosition = _draggingClass.Position;
-            if (newPosition != _dragStartPosition && _viewModel != null)
+            // ← 複数選択時の移動コマンド処理
+            if (_viewModel.IsClassSelected(_draggingClass))
             {
-                _viewModel.MoveClass(_draggingClass, _dragStartPosition, newPosition);
+                var movedClasses = new List<(ClassModel, Point, Point)>();
+
+                foreach (var selectedClass in _viewModel.SelectedClasses)
+                {
+                    var oldPos = selectedClass == _draggingClass
+                        ? _dragStartPosition
+                        : new Point(
+                            selectedClass.Position.X - (_draggingClass.Position.X - _dragStartPosition.X),
+                            selectedClass.Position.Y - (_draggingClass.Position.Y - _dragStartPosition.Y)
+                        );
+
+                    movedClasses.Add((selectedClass, oldPos, selectedClass.Position));
+                }
+
+                if (movedClasses.Any(m => m.Item2 != m.Item3))
+                {
+                    _viewModel.MoveMultipleClasses(movedClasses);
+                }
+            }
+            else
+            {
+                var newPosition = _draggingClass.Position;
+                if (newPosition != _dragStartPosition)
+                {
+                    _viewModel.MoveClass(_draggingClass, _dragStartPosition, newPosition);
+                }
             }
         }
 
@@ -697,7 +873,7 @@ public class DiagramCanvas : Canvas
 /// <summary>
 /// クラスボックスの描画
 /// </summary>
-internal class ClassBoxVisual
+public class ClassBoxVisual
 {
     private const double Padding = 10;
     private const double LineHeight = 20;
@@ -725,13 +901,14 @@ internal class ClassBoxVisual
         Height += Padding;
     }
 
-    public void Draw(DrawingContext dc, ClassModel model)
+    public void Draw(DrawingContext dc, ClassModel model, bool isSelected = false)
     {
         CalculateSize(model);
 
         var position = model.Position;
         var rect = new Rect(position, new Size(Width, Height));
 
+        // 背景色の決定（クラスタイプに応じて）
         var backgroundBrush = model.Type switch
         {
             ClassType.Interface => new SolidColorBrush(Color.FromRgb(230, 240, 255)),
@@ -739,25 +916,66 @@ internal class ClassBoxVisual
             _ => Brushes.White
         };
 
-        dc.DrawRectangle(backgroundBrush, new Pen(Brushes.Black, 2), rect);
+        if (isSelected)
+        {
+            // 外側の光る枠を描画（グロー効果）
+            var glowRect = new Rect(
+                position.X - 4,
+                position.Y - 4,
+                Width + 8,
+                Height + 8
+            );
+
+            var glowBrush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops = new GradientStopCollection
+                {
+                    new GradientStop(Color.FromArgb(100, 33, 150, 243), 0.0),
+                    new GradientStop(Color.FromArgb(150, 33, 150, 243), 0.5),
+                    new GradientStop(Color.FromArgb(100, 33, 150, 243), 1.0)
+                }
+            };
+
+            dc.DrawRectangle(null, new Pen(glowBrush, 6), glowRect);
+
+            // メインの選択枠
+            dc.DrawRectangle(null, new Pen(Brushes.DodgerBlue, 3), rect);
+        }
+
+
+        // メインのボックスを描画
+        var borderPen = isSelected
+            ? new Pen(Brushes.DodgerBlue, 2)
+            : new Pen(Brushes.Black, 2);
+        
+        dc.DrawRectangle(backgroundBrush, borderPen, rect);
 
         double currentY = position.Y;
 
         // ヘッダー
         var headerRect = new Rect(position.X, currentY, Width, HeaderHeight);
-        dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(200, 200, 200)), null, headerRect);
+        var headerBrush = isSelected
+            ? new SolidColorBrush(Color.FromRgb(33, 150, 243)) // 選択時は青色
+            : new SolidColorBrush(Color.FromRgb(200, 200, 200));
+
+        dc.DrawRectangle(headerBrush, null, headerRect);
+
+        var headerTextColor = isSelected ? Brushes.White : Brushes.Black;
 
         if (!string.IsNullOrEmpty(model.TypeDisplayText))
         {
-            DrawText(dc, model.TypeDisplayText, position.X + Padding, currentY + 3, 10, FontStyles.Italic);
+            DrawText(dc, model.TypeDisplayText, position.X + Padding, currentY + 3, 10,
+                FontStyles.Italic, FontWeights.Normal, headerTextColor);
             currentY += 12;
         }
 
         DrawText(dc, model.Name, position.X + Padding, currentY + 8, 14,
             model.Type == ClassType.AbstractClass ? FontStyles.Italic : FontStyles.Normal,
-            FontWeights.Bold);
+            FontWeights.Bold, headerTextColor);
 
-        currentY += HeaderHeight;
+        currentY = position.Y + HeaderHeight;
 
         dc.DrawLine(new Pen(Brushes.Black, 1),
             new Point(position.X, currentY),
@@ -789,13 +1007,51 @@ internal class ClassBoxVisual
                 currentY += LineHeight;
             }
         }
+
+        // ← 選択時のコーナーマーカーを追加
+        if (isSelected)
+        {
+            DrawSelectionCorners(dc, position, Width, Height);
+        }
+    }
+
+    /// <summary>
+    /// 選択コーナーを描画
+    /// </summary>
+    /// <param name="dc"></param>
+    /// <param name="position"></param>
+    /// <param name="width"></param>
+    /// <param name="height"></param>
+    private static void DrawSelectionCorners(DrawingContext dc, Point position, double width, double height)
+    {
+        const double cornerSize = 8;
+        var cornerBrush = Brushes.DodgerBlue;
+        var cornerPen = new Pen(Brushes.White, 1);
+
+        // 左上
+        dc.DrawEllipse(cornerBrush, cornerPen,
+            new Point(position.X, position.Y), cornerSize / 2, cornerSize / 2);
+
+        // 右上
+        dc.DrawEllipse(cornerBrush, cornerPen,
+            new Point(position.X + width, position.Y), cornerSize / 2, cornerSize / 2);
+
+        // 左下
+        dc.DrawEllipse(cornerBrush, cornerPen,
+            new Point(position.X, position.Y + height), cornerSize / 2, cornerSize / 2);
+
+        // 右下
+        dc.DrawEllipse(cornerBrush, cornerPen,
+            new Point(position.X + width, position.Y + height), cornerSize / 2, cornerSize / 2);
     }
 
     private static void DrawText(DrawingContext dc, string text, double x, double y,
-        double fontSize, FontStyle fontStyle = default, FontWeight fontWeight = default)
+        double fontSize, FontStyle fontStyle = default, FontWeight fontWeight = default,
+        Brush? textBrush = null)
     {
         fontWeight = fontWeight == default ? FontWeights.Normal : fontWeight;
         fontStyle = fontStyle == default ? FontStyles.Normal : fontStyle;
+        textBrush ??= Brushes.Black;
 
         var formattedText = new FormattedText(
             text,
@@ -803,7 +1059,7 @@ internal class ClassBoxVisual
             FlowDirection.LeftToRight,
             new Typeface(new FontFamily("Segoe UI"), fontStyle, fontWeight, FontStretches.Normal),
             fontSize,
-            Brushes.Black,
+            textBrush,
             1.0
         );
 

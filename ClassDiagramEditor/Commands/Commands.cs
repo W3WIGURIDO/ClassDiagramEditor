@@ -214,3 +214,41 @@ public class RemoveRelationCommand(DiagramModel diagram, RelationModel relation)
         _diagram.MarkAsModified();
     }
 }
+
+
+/// <summary>
+/// 複数クラス移動コマンド
+/// </summary>
+public class MoveMultipleClassesCommand : IDiagramCommand
+{
+    private readonly DiagramModel _diagram;
+    private readonly List<(ClassModel classModel, Point oldPosition, Point newPosition)> _moves;
+
+    public MoveMultipleClassesCommand(
+        DiagramModel diagram,
+        List<(ClassModel, Point, Point)> moves)
+    {
+        _diagram = diagram;
+        _moves = moves;
+    }
+
+    public string Description => $"Move {_moves.Count} classes";
+
+    public void Execute()
+    {
+        foreach (var (classModel, _, newPosition) in _moves)
+        {
+            classModel.Position = newPosition;
+        }
+        _diagram.MarkAsModified();
+    }
+
+    public void Undo()
+    {
+        foreach (var (classModel, oldPosition, _) in _moves)
+        {
+            classModel.Position = oldPosition;
+        }
+        _diagram.MarkAsModified();
+    }
+}

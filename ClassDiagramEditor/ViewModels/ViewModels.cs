@@ -1,13 +1,14 @@
-﻿using System.Collections.ObjectModel;
+﻿using ClassDiagramEditor.Commands;
+using ClassDiagramEditor.Controls;
+using ClassDiagramEditor.Models;
+using ClassDiagramEditor.Services;
+using Microsoft.Win32;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
-using ClassDiagramEditor.Commands;
-using ClassDiagramEditor.Models;
-using ClassDiagramEditor.Services;
-using Microsoft.Win32;
 
 namespace ClassDiagramEditor.ViewModels;
 
@@ -74,7 +75,7 @@ public class MainViewModel : ViewModelBase
     private DiagramCommandManager _commandManager;
     private FileService _fileService;
     private ExportService _exportService;
-    private ClassModel? _selectedClass;
+    private readonly HashSet<ClassModel> _selectedClasses = new();
     private RelationModel? _selectedRelation;
     private double _zoomLevel = 1.0;
     private string _statusMessage = "Ready";
@@ -101,11 +102,116 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<ClassModel> Classes => _diagram.Classes;
     public ObservableCollection<RelationModel> Relations => _diagram.Relations;
 
+    // 後方互換性のため SelectedClass プロパティを維持
     public ClassModel? SelectedClass
     {
-        get => _selectedClass;
-        set => SetProperty(ref _selectedClass, value);
+        get => _selectedClasses.FirstOrDefault();
+        set
+        {
+            _selectedClasses.Clear();
+            if (value != null)
+            {
+                _selectedClasses.Add(value);
+            }
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedClasses));
+            SelectedClassChanged?.Invoke(this, value);
+            (DeleteSelectedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        }
     }
+
+    // ← 複数選択用プロパティを追加
+    public IReadOnlyCollection<ClassModel> SelectedClasses => _selectedClasses;
+
+
+    // ← 複数選択関連メソッドを追加
+    public void SelectSingleClass(ClassModel classModel)
+    {
+        _selectedClasses.Clear();
+        _selectedClasses.Add(classModel);
+        OnPropertyChanged(nameof(SelectedClass));
+        OnPropertyChanged(nameof(SelectedClasses));
+        SelectedClassChanged?.Invoke(this, classModel);
+        (DeleteSelectedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    public void ToggleClassSelection(ClassModel classModel)
+    {
+        if (_selectedClasses.Contains(classModel))
+        {
+            _selectedClasses.Remove(classModel);
+        }
+        else
+        {
+            _selectedClasses.Add(classModel);
+        }
+        OnPropertyChanged(nameof(SelectedClass));
+        OnPropertyChanged(nameof(SelectedClasses));
+        SelectedClassChanged?.Invoke(this, SelectedClass);
+        (DeleteSelectedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    public void ClearSelection()
+    {
+        _selectedClasses.Clear();
+        OnPropertyChanged(nameof(SelectedClass));
+        OnPropertyChanged(nameof(SelectedClasses));
+        SelectedClassChanged?.Invoke(this, null);
+        (DeleteSelectedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    public bool IsClassSelected(ClassModel classModel)
+    {
+        return _selectedClasses.Contains(classModel);
+    }
+
+    public void SelectClassesInRectangle(Rect selectionRect, Dictionary<Guid, ClassBoxVisual> classVisuals)
+    {
+        foreach (var classModel in Diagram.Classes)
+        {
+            if (classVisuals.TryGetValue(classModel.Id, out var visual))
+            {
+                var classRect = new Rect(
+                    classModel.Position,
+                    new Size(visual.Width, visual.Height)
+                );
+
+                if (selectionRect.IntersectsWith(classRect))
+                {
+                    if (!_selectedClasses.Contains(classModel))
+                    {
+                        _selectedClasses.Add(classModel);
+                    }
+                }
+            }
+        }
+
+        OnPropertyChanged(nameof(SelectedClass));
+        OnPropertyChanged(nameof(SelectedClasses));
+        (DeleteSelectedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    // ← 複数クラス移動用メソッドを追加
+    public void MoveMultipleClasses(List<(ClassModel classModel, Point oldPosition, Point newPosition)> moves)
+    {
+        var command = new MoveMultipleClassesCommand(_diagram, moves);
+        _commandManager.ExecuteCommand(command);
+    }
+
+    public void SelectAllClasses()
+    {
+        _selectedClasses.Clear();
+        foreach (var classModel in Diagram.Classes)
+        {
+            _selectedClasses.Add(classModel);
+        }
+        OnPropertyChanged(nameof(SelectedClass));
+        OnPropertyChanged(nameof(SelectedClasses));
+        StatusMessage = $"{_selectedClasses.Count}個のクラスを選択";
+        (DeleteSelectedCommand as RelayCommand)?.RaiseCanExecuteChanged();
+    }
+
+    public event EventHandler<ClassModel?>? SelectedClassChanged;
 
     public RelationModel? SelectedRelation
     {
@@ -172,7 +278,7 @@ public class MainViewModel : ViewModelBase
         AddClassCommand = new RelayCommand(() => AddClass(ClassType.Class));
         AddInterfaceCommand = new RelayCommand(() => AddClass(ClassType.Interface));
         AddAbstractClassCommand = new RelayCommand(() => AddClass(ClassType.AbstractClass));
-        DeleteSelectedCommand = new RelayCommand(DeleteSelected, () => SelectedClass != null);
+        DeleteSelectedCommand = new RelayCommand(DeleteSelected, () => _selectedClasses.Count > 0);
 
         AddInheritanceCommand = new RelayCommand(() => StartAddingRelation(RelationType.Inheritance));
         AddImplementationCommand = new RelayCommand(() => StartAddingRelation(RelationType.Implementation));
@@ -344,12 +450,18 @@ public class MainViewModel : ViewModelBase
 
     private void DeleteSelected()
     {
-        if (SelectedClass != null)
+        if (_selectedClasses.Count > 0)
         {
-            var command = new RemoveClassCommand(_diagram, SelectedClass);
-            _commandManager.ExecuteCommand(command);
-            StatusMessage = $"Class '{SelectedClass.Name}' deleted";
-            SelectedClass = null;
+            var classesToDelete = _selectedClasses.ToList();
+
+            foreach (var classModel in classesToDelete)
+            {
+                var command = new RemoveClassCommand(_diagram, classModel);
+                _commandManager.ExecuteCommand(command);
+            }
+
+            StatusMessage = $"{classesToDelete.Count}個のクラスを削除しました";
+            ClearSelection();
         }
     }
 
