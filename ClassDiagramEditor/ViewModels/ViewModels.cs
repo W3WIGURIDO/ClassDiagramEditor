@@ -416,6 +416,26 @@ public class MainViewModel : ViewModelBase
         StatusMessage = $"{type} relation added";
     }
 
+    /// <summary>
+    /// 関係を削除する
+    /// </summary>
+    public void RemoveRelation(RelationModel relation)
+    {
+        var command = new RemoveRelationCommand(_diagram, relation);
+        _commandManager.ExecuteCommand(command);
+
+        var sourceClass = _diagram.Classes.FirstOrDefault(c => c.Id == relation.SourceClassId);
+        var targetClass = _diagram.Classes.FirstOrDefault(c => c.Id == relation.TargetClassId);
+
+        string message = $"{relation.Type}関係を削除しました";
+        if (sourceClass != null && targetClass != null)
+        {
+            message += $" ({sourceClass.Name} → {targetClass.Name})";
+        }
+
+        StatusMessage = message;
+    }
+
     public event EventHandler<RelationType>? RelationModeRequested;
 
     #endregion

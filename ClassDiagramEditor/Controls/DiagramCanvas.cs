@@ -25,6 +25,11 @@ public class DiagramCanvas : Canvas
     private RelationType _pendingRelationType;
     private Point _currentMousePosition;
 
+
+    // 関係線ホバー検出用
+    private RelationModel? _hoveredRelation;
+    private const double RelationHitTestDistance = 8.0; // クリック検出範囲（ピクセル）
+
     private readonly Dictionary<Guid, ClassBoxVisual> _classVisuals = [];
 
     public DiagramCanvas()
@@ -34,6 +39,7 @@ public class DiagramCanvas : Canvas
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         MouseMove += OnMouseMove;
         MouseLeftButtonUp += OnMouseLeftButtonUp;
+        MouseRightButtonDown += OnMouseRightButtonDown; // 右クリックイベント追加
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -142,12 +148,14 @@ public class DiagramCanvas : Canvas
 
             if (sourceClass != null && targetClass != null)
             {
-                DrawRelationLine(dc, relation, sourceClass, targetClass);
+                // ホバー中の関係線は強調表示
+                bool isHovered = _hoveredRelation?.Id == relation.Id;
+                DrawRelationLine(dc, relation, sourceClass, targetClass, isHovered);
             }
         }
     }
 
-    private void DrawRelationLine(DrawingContext dc, RelationModel relation, ClassModel source, ClassModel target)
+    private void DrawRelationLine(DrawingContext dc, RelationModel relation, ClassModel source, ClassModel target, bool isHovered)
     {
         var sourceVisual = _classVisuals[source.Id];
         var targetVisual = _classVisuals[target.Id];
@@ -170,53 +178,65 @@ public class DiagramCanvas : Canvas
         // 線のスタイルと色を決定
         Pen pen;
         Brush arrowBrush;
+        Brush lineColor = isHovered ? Brushes.Red : Brushes.Black; // ラインカラー
+        double lineWidth = isHovered ? 3 : 2; // ライン幅
 
         switch (relation.Type)
         {
             case RelationType.Inheritance:
                 // 継承: 実線 + 白抜き三角
-                pen = new Pen(Brushes.Black, 2);
-                arrowBrush = Brushes.White;
+                pen = new Pen(lineColor, lineWidth);
+                arrowBrush = isHovered ? Brushes.LightPink : Brushes.White;
                 break;
 
             case RelationType.Implementation:
                 // 実装: 破線 + 白抜き三角
-                pen = new Pen(Brushes.Black, 2) { DashStyle = DashStyles.Dash };
-                arrowBrush = Brushes.White;
+                pen = new Pen(lineColor, lineWidth) { DashStyle = DashStyles.Dash };
+                arrowBrush = isHovered ? Brushes.LightPink : Brushes.White;
                 break;
 
             case RelationType.Association:
                 // 関連: 実線のみ（矢印なし、または必要に応じて開いた矢印）
-                pen = new Pen(Brushes.Black, 1.5);
-                arrowBrush = Brushes.Black;
+                pen = new Pen(lineColor, lineWidth - 0.5);
+                arrowBrush = lineColor;
                 break;
 
             case RelationType.Dependency:
                 // 依存: 破線 + 開いた矢印
-                pen = new Pen(Brushes.Black, 1.5) { DashStyle = DashStyles.Dash };
-                arrowBrush = Brushes.Black;
+                pen = new Pen(lineColor, lineWidth - 0.5) { DashStyle = DashStyles.Dash };
+                arrowBrush = lineColor;
                 break;
 
             case RelationType.Aggregation:     // 集約
-                pen = new Pen(Brushes.Black, 1.5);
-                arrowBrush = Brushes.White;     // 白抜きダイヤ
+                pen = new Pen(lineColor, lineWidth - 0.5);
+                arrowBrush = isHovered ? Brushes.LightPink : Brushes.White;     // 白抜きダイヤ
                 break;
 
             case RelationType.Composition:     // 合成
-                pen = new Pen(Brushes.Black, 1.5);
-                arrowBrush = Brushes.Black;     // 黒塗りダイヤ
+                pen = new Pen(lineColor, lineWidth - 0.5);
+                arrowBrush = lineColor;     // 黒塗りダイヤ
                 break;
 
             default:
-                pen = new Pen(Brushes.Black, 1.5);
-                arrowBrush = Brushes.Black;
+                pen = new Pen(lineColor, lineWidth - 0.5);
+                arrowBrush = lineColor;
                 break;
         }
 
         // 線を描画（接続点間を結ぶ）
         dc.DrawLine(pen, sourceConnectionPoint, targetConnectionPoint);
         // 継承・実装・依存: ターゲット側のみ矢印
-        DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush);
+        DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush, lineColor);
+
+        // ホバー時にツールチップ表示用の小さな円を描画
+        if (isHovered)
+        {
+            var midPoint = new Point(
+                (sourceConnectionPoint.X + targetConnectionPoint.X) / 2,
+                (sourceConnectionPoint.Y + targetConnectionPoint.Y) / 2
+            );
+            dc.DrawEllipse(Brushes.Red, new Pen(Brushes.White, 2), midPoint, 5, 5);
+        }
 
         // ラベルを描画
         if (!string.IsNullOrEmpty(relation.Label))
@@ -299,7 +319,7 @@ public class DiagramCanvas : Canvas
         return connectionPoint;
     }
 
-    private void DrawArrowHead(DrawingContext dc, RelationType type, Point start, Point end, Brush arrowBrush)
+    private void DrawArrowHead(DrawingContext dc, RelationType type, Point start, Point end, Brush arrowBrush, Brush lineColor)
     {
         var angle = Math.Atan2(end.Y - start.Y, end.X - start.X);
         const double arrowSize = 15;
@@ -328,7 +348,7 @@ public class DiagramCanvas : Canvas
             }
 
             // 白抜き三角形を描画（内側が白、外側が黒線）
-            dc.DrawGeometry(arrowBrush, new Pen(Brushes.Black, 2), triangleGeometry);
+            dc.DrawGeometry(arrowBrush, new Pen(lineColor, 2), triangleGeometry);
         }
         else if (type == RelationType.Dependency)
         {
@@ -342,7 +362,7 @@ public class DiagramCanvas : Canvas
                 end.Y - arrowSize * Math.Sin(angle + arrowAngle)
             );
 
-            var pen = new Pen(Brushes.Black, 1.5);
+            var pen = new Pen(lineColor, 1.5);
             dc.DrawLine(pen, end, arrowPoint1);
             dc.DrawLine(pen, end, arrowPoint2);
         }
@@ -398,8 +418,8 @@ public class DiagramCanvas : Canvas
             }
 
             // 集約：白抜き（◇）、合成：黒塗り（◆）
-            Brush fill = (type == RelationType.Aggregation) ? Brushes.White : Brushes.Black;
-            dc.DrawGeometry(fill, new Pen(Brushes.Black, 1.5), geometry);
+            Brush fill = (type == RelationType.Aggregation) ? Brushes.White : lineColor;
+            dc.DrawGeometry(fill, new Pen(lineColor, 1.5), geometry);
         }
 
     }
@@ -429,7 +449,7 @@ public class DiagramCanvas : Canvas
         dc.DrawLine(pen, sourceConnectionPoint, _currentMousePosition);
 
         // 一時的な矢印も表示
-        DrawArrowHead(dc, _pendingRelationType, sourceConnectionPoint, _currentMousePosition, Brushes.LightGray);
+        DrawArrowHead(dc, _pendingRelationType, sourceConnectionPoint, _currentMousePosition, Brushes.LightGray, Brushes.Gray);
     }
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -479,9 +499,49 @@ public class DiagramCanvas : Canvas
         }
     }
 
+    private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_viewModel == null) return;
+
+        var clickPoint = e.GetPosition(this);
+        var clickedRelation = GetRelationAtPoint(clickPoint);
+
+        if (clickedRelation != null)
+        {
+            // コンテキストメニューを作成
+            var contextMenu = new ContextMenu();
+
+            var deleteMenuItem = new MenuItem
+            {
+                Header = "🗑️ この関係を削除",
+                FontSize = 13
+            };
+            deleteMenuItem.Click += (s, args) =>
+            {
+                _viewModel.RemoveRelation(clickedRelation);
+            };
+
+            contextMenu.Items.Add(deleteMenuItem);
+            contextMenu.IsOpen = true;
+            contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        }
+    }
+
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
         _currentMousePosition = e.GetPosition(this);
+
+        if (!_isDragging && !_isAddingRelation)
+        {
+            var previousHovered = _hoveredRelation;
+            _hoveredRelation = GetRelationAtPoint(_currentMousePosition);
+
+            if (_hoveredRelation != previousHovered)
+            {
+                Cursor = _hoveredRelation != null ? Cursors.Hand : Cursors.Arrow;
+                InvalidateVisual();
+            }
+        }
 
         if (_isAddingRelation)
         {
@@ -543,6 +603,76 @@ public class DiagramCanvas : Canvas
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// 指定した点の近くにある関係線を取得
+    /// </summary>
+    private RelationModel? GetRelationAtPoint(Point point)
+    {
+        if (_viewModel == null) return null;
+
+        foreach (var relation in _viewModel.Diagram.Relations)
+        {
+            var sourceClass = _viewModel.Diagram.Classes.FirstOrDefault(c => c.Id == relation.SourceClassId);
+            var targetClass = _viewModel.Diagram.Classes.FirstOrDefault(c => c.Id == relation.TargetClassId);
+
+            if (sourceClass != null && targetClass != null)
+            {
+                if (_classVisuals.TryGetValue(sourceClass.Id, out var sourceVisual) &&
+                    _classVisuals.TryGetValue(targetClass.Id, out var targetVisual))
+                {
+                    var sourceCenter = new Point(
+                        sourceClass.Position.X + sourceVisual.Width / 2,
+                        sourceClass.Position.Y + sourceVisual.Height / 2
+                    );
+
+                    var targetCenter = new Point(
+                        targetClass.Position.X + targetVisual.Width / 2,
+                        targetClass.Position.Y + targetVisual.Height / 2
+                    );
+
+                    var sourcePoint = GetConnectionPoint(sourceClass.Position, sourceVisual.Width, sourceVisual.Height, sourceCenter, targetCenter);
+                    var targetPoint = GetConnectionPoint(targetClass.Position, targetVisual.Width, targetVisual.Height, targetCenter, sourceCenter);
+
+                    // 点と線分の距離を計算
+                    double distance = DistanceFromPointToLineSegment(point, sourcePoint, targetPoint);
+
+                    if (distance < RelationHitTestDistance)
+                    {
+                        return relation;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 点から線分への最短距離を計算
+    /// </summary>
+    private double DistanceFromPointToLineSegment(Point point, Point lineStart, Point lineEnd)
+    {
+        double dx = lineEnd.X - lineStart.X;
+        double dy = lineEnd.Y - lineStart.Y;
+
+        if (dx == 0 && dy == 0)
+        {
+            // 線分が点の場合
+            return Math.Sqrt(Math.Pow(point.X - lineStart.X, 2) + Math.Pow(point.Y - lineStart.Y, 2));
+        }
+
+        // パラメータt（0〜1）を計算
+        double t = ((point.X - lineStart.X) * dx + (point.Y - lineStart.Y) * dy) / (dx * dx + dy * dy);
+        t = Math.Max(0, Math.Min(1, t));
+
+        // 線分上の最も近い点
+        double nearestX = lineStart.X + t * dx;
+        double nearestY = lineStart.Y + t * dy;
+
+        // 距離を計算
+        return Math.Sqrt(Math.Pow(point.X - nearestX, 2) + Math.Pow(point.Y - nearestY, 2));
     }
 
     public void StartAddingRelation(RelationType type)

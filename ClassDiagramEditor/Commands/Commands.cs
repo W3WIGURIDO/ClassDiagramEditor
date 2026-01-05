@@ -191,3 +191,26 @@ public class AddRelationCommand(DiagramModel diagram, RelationModel relation) : 
         _diagram.MarkAsModified();
     }
 }
+
+/// <summary>
+/// 関係削除コマンド
+/// </summary>
+public class RemoveRelationCommand(DiagramModel diagram, RelationModel relation) : IDiagramCommand
+{
+    private readonly DiagramModel _diagram = diagram;
+    private readonly RelationModel _relation = relation;
+
+    public string Description => $"Remove relation ({_relation.Type})";
+
+    public void Execute()
+    {
+        _diagram.Relations.Remove(_relation);
+        _diagram.MarkAsModified();
+    }
+
+    public void Undo()
+    {
+        _diagram.Relations.Add(_relation);
+        _diagram.MarkAsModified();
+    }
+}
