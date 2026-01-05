@@ -197,6 +197,16 @@ public class DiagramCanvas : Canvas
                 arrowBrush = Brushes.Black;
                 break;
 
+            case RelationType.Aggregation:     // 集約
+                pen = new Pen(Brushes.Black, 1.5);
+                arrowBrush = Brushes.White;     // 白抜きダイヤ
+                break;
+
+            case RelationType.Composition:     // 合成
+                pen = new Pen(Brushes.Black, 1.5);
+                arrowBrush = Brushes.Black;     // 黒塗りダイヤ
+                break;
+
             default:
                 pen = new Pen(Brushes.Black, 1.5);
                 arrowBrush = Brushes.Black;
@@ -205,19 +215,8 @@ public class DiagramCanvas : Canvas
 
         // 線を描画（接続点間を結ぶ）
         dc.DrawLine(pen, sourceConnectionPoint, targetConnectionPoint);
-
-        // 矢印を描画
-        if (relation.Type == RelationType.Association)
-        {
-            // 関連: 両端に矢印を描画
-            DrawArrowHead(dc, relation.Type, targetConnectionPoint, sourceConnectionPoint, arrowBrush); // ソース側の矢印
-            DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush); // ターゲット側の矢印
-        }
-        else
-        {
-            // 継承・実装・依存: ターゲット側のみ矢印
-            DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush);
-        }
+        // 継承・実装・依存: ターゲット側のみ矢印
+        DrawArrowHead(dc, relation.Type, sourceConnectionPoint, targetConnectionPoint, arrowBrush);
 
         // ラベルを描画
         if (!string.IsNullOrEmpty(relation.Label))
@@ -349,27 +348,60 @@ public class DiagramCanvas : Canvas
         }
         else if (type == RelationType.Association)
         {
-            bool enableAssociationArrow = false;
-            if ((enableAssociationArrow))
-            {
-
-                // 関連: 矢印なし（オプション: 開いた矢印を描画する場合）
-                // UML標準では関連に矢印は不要だが、方向性を示す場合は描画
-                var arrowPoint1 = new Point(
-                    end.X - arrowSize * 0.7 * Math.Cos(angle - arrowAngle),
-                    end.Y - arrowSize * 0.7 * Math.Sin(angle - arrowAngle)
-                );
-                var arrowPoint2 = new Point(
-                    end.X - arrowSize * 0.7 * Math.Cos(angle + arrowAngle),
-                    end.Y - arrowSize * 0.7 * Math.Sin(angle + arrowAngle)
-                );
-
-                var pen = new Pen(Brushes.Black, 1.5);
-                dc.DrawLine(pen, end, arrowPoint1);
-                dc.DrawLine(pen, end, arrowPoint2);
-
-            }
+            //関連：矢印無し
         }
+        else if (type == RelationType.Aggregation || type == RelationType.Composition)
+        {
+            // ✅ ダイヤモンドのサイズ設定
+            const double diamondLength = 10; // 前後の長さ（先端から中心まで）
+            const double diamondWidth = 8;  // 左右の幅（中心から端まで） ★ここを小さくすると細くなります
+
+            // 進行方向の単位ベクトル成分
+            double cosA = Math.Cos(angle);
+            double sinA = Math.Sin(angle);
+
+            // 1. 先端: 矢印の終点
+            var tipPoint = end;
+
+            // 2. 中心点: 先端から diamondLength 分だけ戻った点
+            var midPoint = new Point(
+                end.X - diamondLength * cosA,
+                end.Y - diamondLength * sinA
+            );
+
+            // 3. 後端: 先端から diamondLength * 2 分だけ戻った点
+            var backPoint = new Point(
+                end.X - 2 * diamondLength * cosA,
+                end.Y - 2 * diamondLength * sinA
+            );
+
+            // 4. 左の点: 中心点から diamondWidth 分だけ左にオフセット
+            var leftPoint = new Point(
+                midPoint.X + diamondWidth * sinA,
+                midPoint.Y - diamondWidth * cosA
+            );
+
+            // 5. 右の点: 中心点から diamondWidth 分だけ右にオフセット
+            var rightPoint = new Point(
+                midPoint.X - diamondWidth * sinA,
+                midPoint.Y + diamondWidth * cosA
+            );
+
+            // 図形の描画処理（変更なし）
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(tipPoint, true, true);
+                ctx.LineTo(leftPoint, true, false);
+                ctx.LineTo(backPoint, true, false);
+                ctx.LineTo(rightPoint, true, false);
+            }
+
+            // 集約：白抜き（◇）、合成：黒塗り（◆）
+            Brush fill = (type == RelationType.Aggregation) ? Brushes.White : Brushes.Black;
+            dc.DrawGeometry(fill, new Pen(Brushes.Black, 1.5), geometry);
+        }
+
     }
 
     private void DrawTemporaryRelationLine(DrawingContext dc)

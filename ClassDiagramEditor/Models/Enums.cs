@@ -29,7 +29,9 @@ public enum RelationType
     Inheritance,      // 継承
     Implementation,   // 実装
     Association,      // 関連
-    Dependency       // 依存
+    Dependency,       // 依存
+    Aggregation,      //集約
+    Composition       //合成
 }
 
 /// <summary>

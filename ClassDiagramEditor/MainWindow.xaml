@@ -156,6 +156,12 @@
                         <Button Content="⤴️ 依存" 
                                 Command="{Binding AddDependencyCommand}" 
                                 Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="◇ 集約" 
+                                Command="{Binding AddAggregationCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
+                        <Button Content="◆ 合成" 
+                                Command="{Binding AddCompositionCommand}" 
+                                Style="{StaticResource SidePanelButtonStyle}"/>
 
                         <!-- 編集 -->
                         <TextBlock Text="編集" 

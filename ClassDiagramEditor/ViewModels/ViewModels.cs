@@ -152,6 +152,8 @@ public class MainViewModel : ViewModelBase
     public ICommand AddImplementationCommand { get; private set; } = null!;
     public ICommand AddAssociationCommand { get; private set; } = null!;
     public ICommand AddDependencyCommand { get; private set; } = null!;
+    public ICommand AddAggregationCommand { get; private set; } = null!;
+    public ICommand AddCompositionCommand { get; private set; } = null!;
 
     public ICommand UndoCommand { get; private set; } = null!;
     public ICommand RedoCommand { get; private set; } = null!;
@@ -176,6 +178,8 @@ public class MainViewModel : ViewModelBase
         AddImplementationCommand = new RelayCommand(() => StartAddingRelation(RelationType.Implementation));
         AddAssociationCommand = new RelayCommand(() => StartAddingRelation(RelationType.Association));
         AddDependencyCommand = new RelayCommand(() => StartAddingRelation(RelationType.Dependency));
+        AddAggregationCommand = new RelayCommand(() => StartAddingRelation(RelationType.Aggregation));
+        AddCompositionCommand = new RelayCommand(() => StartAddingRelation(RelationType.Composition));
 
         UndoCommand = new RelayCommand(Undo, () => CanUndo);
         RedoCommand = new RelayCommand(Redo, () => CanRedo);
