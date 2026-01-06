@@ -19,6 +19,9 @@ public class DiagramCanvas : Canvas
     private Point _dragStartPosition;
     private bool _isDragging;
 
+    // ← 複数選択移動用：各クラスの初期位置を保存
+    private readonly Dictionary<Guid, Point> _dragStartPositions = new();
+
     // 関係追加モード
     private bool _isAddingRelation;
     private ClassModel? _relationSourceClass;
@@ -580,6 +583,14 @@ public class DiagramCanvas : Canvas
                 _draggingClass = clickedClass;
                 _dragStartPoint = clickPoint;
                 _dragStartPosition = clickedClass.Position;
+
+                // ← 複数選択されている全クラスの初期位置を保存
+                _dragStartPositions.Clear();
+                foreach (var selectedClass in _viewModel.SelectedClasses)
+                {
+                    _dragStartPositions[selectedClass.Id] = selectedClass.Position;
+                }
+
                 _isDragging = false;
                 CaptureMouse();
                 InvalidateVisual();
@@ -680,16 +691,15 @@ public class DiagramCanvas : Canvas
                 {
                     foreach (var selectedClass in _viewModel.SelectedClasses)
                     {
-                        var originalPos = selectedClass == _draggingClass
-                            ? _dragStartPosition
-                            : selectedClass.Position;
-
-                        var newPosition = new Point(
-                            Math.Max(0, originalPos.X + offset.X),
-                            Math.Max(0, originalPos.Y + offset.Y)
-                        );
-
-                        selectedClass.Position = newPosition;
+                        // 保存された初期位置から相対的に移動
+                        if (_dragStartPositions.TryGetValue(selectedClass.Id, out var originalPos))
+                        {
+                            var newPosition = new Point(
+                                Math.Max(0, originalPos.X + offset.X),
+                                Math.Max(0, originalPos.Y + offset.Y)
+                            );
+                            selectedClass.Position = newPosition;
+                        }
                     }
                 }
                 else
@@ -731,17 +741,18 @@ public class DiagramCanvas : Canvas
 
                 foreach (var selectedClass in _viewModel.SelectedClasses)
                 {
-                    var oldPos = selectedClass == _draggingClass
-                        ? _dragStartPosition
-                        : new Point(
-                            selectedClass.Position.X - (_draggingClass.Position.X - _dragStartPosition.X),
-                            selectedClass.Position.Y - (_draggingClass.Position.Y - _dragStartPosition.Y)
-                        );
-
-                    movedClasses.Add((selectedClass, oldPos, selectedClass.Position));
+                    // 保存された初期位置を使用
+                    if (_dragStartPositions.TryGetValue(selectedClass.Id, out var oldPos))
+                    {
+                        var newPos = selectedClass.Position;
+                        if (oldPos != newPos)
+                        {
+                            movedClasses.Add((selectedClass, oldPos, newPos));
+                        }
+                    }
                 }
 
-                if (movedClasses.Any(m => m.Item2 != m.Item3))
+                if (movedClasses.Count > 0)
                 {
                     _viewModel.MoveMultipleClasses(movedClasses);
                 }
@@ -758,6 +769,7 @@ public class DiagramCanvas : Canvas
 
         _draggingClass = null;
         _isDragging = false;
+        _dragStartPositions.Clear(); // ← クリア
         ReleaseMouseCapture();
     }
 
