@@ -62,6 +62,61 @@ public partial class MainWindow : Window
 
             _viewModel.SelectedClassChanged += (s, classModel) =>
                 DiagramCanvas.InvalidateVisual();
+
+            // [2026-03-24 追加] エクスポートダイアログ要求イベントを購読
+            _viewModel.ExportRequested += ViewModel_ExportRequested;
+        }
+    }
+
+    // [2026-03-24 追加] エクスポートダイアログを開いて形式に応じた処理を実行
+    private void ViewModel_ExportRequested(object? sender, EventArgs e)
+    {
+        if (_viewModel == null) return;
+
+        // クラスが1つもない場合は警告
+        var bounds = _viewModel.GetDiagramBounds();
+        if (bounds.IsEmpty)
+        {
+            MessageBox.Show("エクスポートするクラスがありません。", "エクスポート",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new Dialogs.ExportDialog { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.Result == null) return;
+
+        var result = dialog.Result;
+        double pad = result.Padding;
+
+        switch (result.Format)
+        {
+            case Dialogs.ExportFormat.Png:
+                {
+                    var saveDialog = new Microsoft.Win32.SaveFileDialog
+                    {
+                        Filter = "PNG Image (*.png)|*.png",
+                        DefaultExt = ".png",
+                        FileName = _viewModel.Diagram.Name
+                    };
+                    if (saveDialog.ShowDialog() == true)
+                        _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad);
+                    break;
+                }
+            case Dialogs.ExportFormat.Svg:
+                {
+                    var saveDialog = new Microsoft.Win32.SaveFileDialog
+                    {
+                        Filter = "SVG Image (*.svg)|*.svg",
+                        DefaultExt = ".svg",
+                        FileName = _viewModel.Diagram.Name
+                    };
+                    if (saveDialog.ShowDialog() == true)
+                        _viewModel.ExportToSvg(saveDialog.FileName, bounds, pad);
+                    break;
+                }
+            case Dialogs.ExportFormat.Clipboard:
+                _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad);
+                break;
         }
     }
 

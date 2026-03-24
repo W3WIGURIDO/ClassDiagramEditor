@@ -419,16 +419,22 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    // [2026-03-24 修正] ExportCommandをダイアログ経由の本実装に変更
     private void ExportDiagram()
     {
-        StatusMessage = "Export: Use File menu to export as PNG";
+        // MainWindow側でダイアログを開くためにイベントを発火
+        ExportRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    public void ExportToPng(UIElement canvas, string filePath)
+    // [2026-03-24 追加] エクスポートダイアログ表示要求イベント
+    public event EventHandler? ExportRequested;
+
+    // [2026-03-24 修正] バウンディングボックスを受け取ってPNG出力
+    public void ExportToPng(UIElement canvas, string filePath, Rect bounds, double padding)
     {
         try
         {
-            _exportService.ExportToPng(canvas, filePath, 2000, 2000);
+            _exportService.ExportToPng(canvas, filePath, bounds, padding);
             StatusMessage = $"Exported: {Path.GetFileName(filePath)}";
         }
         catch (Exception ex)
@@ -437,6 +443,70 @@ public class MainViewModel : ViewModelBase
                 MessageBoxButton.OK, MessageBoxImage.Error);
             StatusMessage = "Export failed";
         }
+    }
+
+    // [2026-03-24 追加] バウンディングボックスを受け取ってSVG出力
+    public void ExportToSvg(string filePath, Rect bounds, double padding)
+    {
+        try
+        {
+            _exportService.ExportToSvg(null!, filePath, bounds, padding,
+                _diagram.Classes, _diagram.Relations);
+            StatusMessage = $"Exported: {Path.GetFileName(filePath)}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to export: {ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = "Export failed";
+        }
+    }
+
+    // [2026-03-24 追加] バウンディングボックスを受け取ってクリップボードへコピー
+    public void ExportToClipboard(UIElement canvas, Rect bounds, double padding)
+    {
+        try
+        {
+            _exportService.CopyToClipboard(canvas, bounds, padding);
+            StatusMessage = "クリップボードにコピーしました";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to copy: {ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = "Copy failed";
+        }
+    }
+
+    // [2026-03-24 追加] 現在の図のバウンディングボックスを計算して返す
+    // クラスが1つもない場合は Empty を返す
+    public Rect GetDiagramBounds()
+    {
+        if (_diagram.Classes.Count == 0) return Rect.Empty;
+
+        // 暫定サイズ（ClassBoxVisualの計算と合わせる）
+        const double classMinWidth = 150;
+        const double classHeaderH = 35;
+        const double classLineH = 20;
+        const double classPad = 10;
+
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        foreach (var cls in _diagram.Classes)
+        {
+            double h = classHeaderH;
+            if (cls.Attributes.Count > 0) h += classPad + cls.Attributes.Count * classLineH;
+            if (cls.Methods.Count > 0) h += classPad + cls.Methods.Count * classLineH;
+            h += classPad;
+
+            minX = Math.Min(minX, cls.Position.X);
+            minY = Math.Min(minY, cls.Position.Y);
+            maxX = Math.Max(maxX, cls.Position.X + classMinWidth);
+            maxY = Math.Max(maxY, cls.Position.Y + h);
+        }
+
+        return new Rect(minX, minY, maxX - minX, maxY - minY);
     }
 
     private void AddClass(ClassType type)
