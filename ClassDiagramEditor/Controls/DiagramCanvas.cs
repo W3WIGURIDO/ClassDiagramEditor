@@ -51,6 +51,7 @@ public class DiagramCanvas : Canvas
         MouseRightButtonDown += OnMouseRightButtonDown; // 右クリックイベント追加
     }
 
+    // [2026-03-24 修正] Diagramプロパティ変更時の再初期化に対応するためViewModelのPropertyChangedを購読
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _viewModel = DataContext as MainViewModel;
@@ -63,7 +64,44 @@ public class DiagramCanvas : Canvas
             {
                 AddClassVisual(classModel);
             }
+
+            // [2026-03-24 追加] DiagramプロパティがReplaceされた際に再初期化を行うため購読
+            _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         }
+    }
+
+    // [2026-03-24 追加] ViewModelのDiagramプロパティ変更を検知してキャンバスを再初期化する
+    private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.Diagram))
+        {
+            ResetDiagram();
+        }
+    }
+
+    // [2026-03-24 追加] 新規作成・ファイル読み込み時に_classVisualsと購読を初期化し直す
+    private void ResetDiagram()
+    {
+        if (_viewModel == null) return;
+
+        // 古いDiagramのCollectionChanged購読を解除
+        _viewModel.Diagram.Classes.CollectionChanged -= Classes_CollectionChanged;
+        _viewModel.Diagram.Relations.CollectionChanged -= Relations_CollectionChanged;
+
+        // _classVisualsをクリアして新しいDiagramの状態に合わせる
+        _classVisuals.Clear();
+
+        // 新しいDiagramのCollectionChangedを購読
+        _viewModel.Diagram.Classes.CollectionChanged += Classes_CollectionChanged;
+        _viewModel.Diagram.Relations.CollectionChanged += Relations_CollectionChanged;
+
+        // 新しいDiagramの全クラスを_classVisualsに登録
+        foreach (var classModel in _viewModel.Diagram.Classes)
+        {
+            AddClassVisual(classModel);
+        }
+
+        InvalidateVisual();
     }
 
     private void Classes_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

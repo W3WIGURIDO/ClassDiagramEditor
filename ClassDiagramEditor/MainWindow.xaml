@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:ClassDiagramEditor"
         xmlns:controls="clr-namespace:ClassDiagramEditor.Controls"
         mc:Ignorable="d"
-        Title="Class Diagram Editor - .NET 10.0" 
+        Title="Class Diagram Editor - 新規作成"
         Height="850" 
         Width="1600"
         Background="#F0F0F0"
@@ -73,6 +73,8 @@
                 <Button Content="新規作成" Command="{Binding NewDiagramCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
                 <Button Content="開く" Command="{Binding LoadCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
                 <Button Content="保存" Command="{Binding SaveCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
+                <!-- [2026-03-24 追加] 名前を付けて保存ボタンを追加 -->
+                <Button Content="名前を付けて保存" Command="{Binding SaveAsCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
                 <Button Content="エクスポート" Command="{Binding ExportCommand}" Style="{StaticResource ToolBarButtonStyle}"/>
 
                 <Separator Width="1" Background="#DDDDDD" Margin="10,5"/>

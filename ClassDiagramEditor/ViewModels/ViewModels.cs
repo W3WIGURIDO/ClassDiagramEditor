@@ -246,6 +246,8 @@ public class MainViewModel : ViewModelBase
 
     public ICommand NewDiagramCommand { get; private set; } = null!;
     public ICommand SaveCommand { get; private set; } = null!;
+    // [2026-03-24 追加] 名前を付けて保存コマンド
+    public ICommand SaveAsCommand { get; private set; } = null!;
     public ICommand LoadCommand { get; private set; } = null!;
     public ICommand ExportCommand { get; private set; } = null!;
 
@@ -272,6 +274,8 @@ public class MainViewModel : ViewModelBase
     {
         NewDiagramCommand = new RelayCommand(NewDiagram);
         SaveCommand = new RelayCommand(SaveDiagram);
+        // [2026-03-24 追加] 名前を付けて保存コマンドを初期化
+        SaveAsCommand = new RelayCommand(SaveDiagramAs);
         LoadCommand = new RelayCommand(LoadDiagram);
         ExportCommand = new RelayCommand(ExportDiagram);
 
@@ -307,42 +311,67 @@ public class MainViewModel : ViewModelBase
 
     private void NewDiagram()
     {
-        _diagram = new DiagramModel();
+        // [2026-03-24 修正] フィールド直接代入からプロパティ経由に変更し、PropertyChangedを発火させる
+        Diagram = new DiagramModel();
         _commandManager.Clear();
         SelectedClass = null;
         SelectedRelation = null;
         _currentFilePath = null;
-        OnPropertyChanged(nameof(Diagram));
         OnPropertyChanged(nameof(Classes));
         OnPropertyChanged(nameof(Relations));
         StatusMessage = "New diagram created";
+
+        // [2026-03-24 追加] 新規作成時にウィンドウタイトルを更新
+        UpdateWindowTitle();
     }
 
+    // [2026-03-24 修正] 既存ファイルがある場合は上書き保存、ない場合はダイアログを表示
     private void SaveDiagram()
     {
         try
         {
             if (string.IsNullOrEmpty(_currentFilePath))
             {
-                var dialog = new SaveFileDialog
-                {
-                    Filter = "Class Diagram Files (*.cdf)|*.cdf|All Files (*.*)|*.*",
-                    DefaultExt = ".cdf",
-                    FileName = _diagram.Name
-                };
-
-                if (dialog.ShowDialog() == true)
-                {
-                    _currentFilePath = dialog.FileName;
-                }
-                else
-                {
-                    return;
-                }
+                // ファイルパスが未設定の場合はダイアログを表示
+                SaveDiagramAs();
+                return;
             }
 
             _fileService.SaveDiagram(_diagram, _currentFilePath);
             StatusMessage = $"Saved: {Path.GetFileName(_currentFilePath)}";
+
+            // [2026-03-24 追加] 保存後にウィンドウタイトルを更新
+            UpdateWindowTitle();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to save diagram: {ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = "Save failed";
+        }
+    }
+
+    // [2026-03-24 追加] 名前を付けて保存：常にダイアログを表示して保存先を指定する
+    private void SaveDiagramAs()
+    {
+        try
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Class Diagram Files (*.cdf)|*.cdf|All Files (*.*)|*.*",
+                DefaultExt = ".cdf",
+                FileName = _diagram.Name
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                _currentFilePath = dialog.FileName;
+                _fileService.SaveDiagram(_diagram, _currentFilePath);
+                StatusMessage = $"Saved: {Path.GetFileName(_currentFilePath)}";
+
+                // [2026-03-24 追加] 保存後にウィンドウタイトルを更新
+                UpdateWindowTitle();
+            }
         }
         catch (Exception ex)
         {
@@ -365,17 +394,21 @@ public class MainViewModel : ViewModelBase
             if (dialog.ShowDialog() == true)
             {
                 var loadedDiagram = _fileService.LoadDiagram(dialog.FileName);
-                _diagram = loadedDiagram;
+
+                // [2026-03-24 修正] フィールド直接代入からプロパティ経由に変更し、PropertyChangedを発火させる
+                Diagram = loadedDiagram;
                 _currentFilePath = dialog.FileName;
                 _commandManager.Clear();
                 SelectedClass = null;
                 SelectedRelation = null;
 
-                OnPropertyChanged(nameof(Diagram));
                 OnPropertyChanged(nameof(Classes));
                 OnPropertyChanged(nameof(Relations));
 
                 StatusMessage = $"Loaded: {Path.GetFileName(dialog.FileName)}";
+
+                // [2026-03-24 追加] 読み込み後にウィンドウタイトルを更新
+                UpdateWindowTitle();
             }
         }
         catch (Exception ex)
@@ -504,6 +537,20 @@ public class MainViewModel : ViewModelBase
     #endregion
 
     #region Public Methods
+
+    // [2026-03-24 追加] ウィンドウタイトルを現在のファイル状態に応じて更新する
+    // ファイル未開時は「新規作成」、開いている場合はファイル名を表示
+    public void UpdateWindowTitle()
+    {
+        var fileName = string.IsNullOrEmpty(_currentFilePath)
+            ? "新規作成"
+            : Path.GetFileName(_currentFilePath);
+
+        if (Application.Current.MainWindow != null)
+        {
+            Application.Current.MainWindow.Title = $"Class Diagram Editor - {fileName}";
+        }
+    }
 
     public void MoveClass(ClassModel classModel, Point oldPosition, Point newPosition)
     {
