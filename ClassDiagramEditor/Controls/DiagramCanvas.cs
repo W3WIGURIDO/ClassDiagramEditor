@@ -33,6 +33,13 @@ public class DiagramCanvas : Canvas
     private RelationModel? _hoveredRelation;
     private const double RelationHitTestDistance = 8.0; // クリック検出範囲（ピクセル）
 
+    // [2026-03-25 追加] 中ボタンパン操作用フィールド
+    private bool _isPanning;
+    private Point _panStartPoint; // [2026-03-25 修正] ScrollViewer基準の座標で保持
+    private System.Windows.Controls.ScrollViewer? _parentScrollViewer;
+    private double _panScrollOffsetX;
+    private double _panScrollOffsetY;
+
 
     // 矩形選択用フィールド
     private bool _isRectangleSelecting;
@@ -51,6 +58,9 @@ public class DiagramCanvas : Canvas
         MouseMove += OnMouseMove;
         MouseLeftButtonUp += OnMouseLeftButtonUp;
         MouseRightButtonDown += OnMouseRightButtonDown;
+        // [2026-03-25 追加] 中ボタンパン操作のイベント登録
+        MouseDown += OnMouseDown;
+        MouseUp += OnMouseUp;
     }
 
     // [2026-03-24 修正] Diagramプロパティ変更時の再初期化に対応するためViewModelのPropertyChangedを購読
@@ -70,6 +80,9 @@ public class DiagramCanvas : Canvas
             // [2026-03-24 追加] DiagramプロパティがReplaceされた際に再初期化を行うため購読
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         }
+
+        // [2026-03-25 追加] 親のScrollViewerを取得してパン操作に使用する
+        _parentScrollViewer = FindParentScrollViewer(this);
     }
 
     // [2026-03-24 追加] ViewModelのDiagramプロパティ変更を検知してキャンバスを再初期化する
@@ -686,6 +699,19 @@ public class DiagramCanvas : Canvas
     {
         _currentMousePosition = e.GetPosition(this);
 
+        // [2026-03-25 追加] 中ボタンパン処理：ドラッグ量だけScrollViewerをスクロール
+        if (_isPanning && _parentScrollViewer != null)
+        {
+            // [2026-03-25 修正] ScrollViewer基準の座標で差分を計算することで発振を防ぐ
+            var current = e.GetPosition(_parentScrollViewer);
+            double deltaX = current.X - _panStartPoint.X;
+            double deltaY = current.Y - _panStartPoint.Y;
+            _parentScrollViewer.ScrollToHorizontalOffset(_panScrollOffsetX - deltaX);
+            _parentScrollViewer.ScrollToVerticalOffset(_panScrollOffsetY - deltaY);
+            e.Handled = true;
+            return;
+        }
+
         // 関係線のホバー検出
         if (!_isDragging && !_isAddingRelation && !_isRectangleSelecting)
         {
@@ -919,6 +945,51 @@ public class DiagramCanvas : Canvas
         _isAddingRelation = false;
         _relationSourceClass = null;
         InvalidateVisual();
+    }
+
+    // [2026-03-25 追加] 親要素をたどってScrollViewerを取得するヘルパー
+    private static System.Windows.Controls.ScrollViewer? FindParentScrollViewer(DependencyObject child)
+    {
+        var parent = System.Windows.Media.VisualTreeHelper.GetParent(child);
+        while (parent != null)
+        {
+            if (parent is System.Windows.Controls.ScrollViewer sv)
+                return sv;
+            parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
+        }
+        return null;
+    }
+
+    // [2026-03-25 追加] 中ボタン押下：パン開始
+    private void OnMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
+
+        if (_parentScrollViewer == null)
+            _parentScrollViewer = FindParentScrollViewer(this);
+
+        _isPanning = true;
+        // [2026-03-25 修正] スクロールで座標がずれないようScrollViewer基準で取得
+        _panStartPoint = e.GetPosition(_parentScrollViewer);
+        _panScrollOffsetX = _parentScrollViewer?.HorizontalOffset ?? 0;
+        _panScrollOffsetY = _parentScrollViewer?.VerticalOffset ?? 0;
+
+        // 掴み中のカーソルに変更
+        Cursor = Cursors.SizeAll;
+        CaptureMouse();
+        e.Handled = true;
+    }
+
+    // [2026-03-25 追加] 中ボタン離放：パン終了
+    private void OnMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
+        if (!_isPanning) return;
+
+        _isPanning = false;
+        Cursor = Cursors.Arrow;
+        ReleaseMouseCapture();
+        e.Handled = true;
     }
 
     // [2026-03-25 追加] エクスポート時に背景・グリッドを一時的に非表示にするメソッド群
