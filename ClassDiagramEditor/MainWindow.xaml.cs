@@ -88,6 +88,7 @@ public partial class MainWindow : Window
         var result = dialog.Result;
         double pad = result.Padding;
 
+        // [2026-03-25 修正] 透過背景フラグをダイアログ結果から取得し各エクスポートメソッドへ渡す
         switch (result.Format)
         {
             case Dialogs.ExportFormat.Png:
@@ -99,7 +100,13 @@ public partial class MainWindow : Window
                         FileName = _viewModel.Diagram.Name
                     };
                     if (saveDialog.ShowDialog() == true)
-                        _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad);
+                    {
+                        // 透過指定時はキャンバス背景を一時的に透明化してレンダリング
+                        DiagramCanvas.RunWithTransparentBackground(() =>
+                            _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad,
+                                                   result.TransparentBackground),
+                            result.TransparentBackground);
+                    }
                     break;
                 }
             case Dialogs.ExportFormat.Svg:
@@ -115,7 +122,11 @@ public partial class MainWindow : Window
                     break;
                 }
             case Dialogs.ExportFormat.Clipboard:
-                _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad);
+                // 透過指定時はキャンバス背景を一時的に透明化してレンダリング
+                DiagramCanvas.RunWithTransparentBackground(() =>
+                    _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad,
+                                                 result.TransparentBackground),
+                    result.TransparentBackground);
                 break;
         }
     }

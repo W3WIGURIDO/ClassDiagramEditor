@@ -429,12 +429,13 @@ public class MainViewModel : ViewModelBase
     // [2026-03-24 追加] エクスポートダイアログ表示要求イベント
     public event EventHandler? ExportRequested;
 
-    // [2026-03-24 修正] バウンディングボックスを受け取ってPNG出力
-    public void ExportToPng(UIElement canvas, string filePath, Rect bounds, double padding)
+    // [2026-03-25 修正] 透過背景フラグを追加
+    public void ExportToPng(UIElement canvas, string filePath, Rect bounds, double padding,
+                            bool transparentBackground = false)
     {
         try
         {
-            _exportService.ExportToPng(canvas, filePath, bounds, padding);
+            _exportService.ExportToPng(canvas, filePath, bounds, padding, transparentBackground);
             StatusMessage = $"Exported: {Path.GetFileName(filePath)}";
         }
         catch (Exception ex)
@@ -462,12 +463,13 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // [2026-03-24 追加] バウンディングボックスを受け取ってクリップボードへコピー
-    public void ExportToClipboard(UIElement canvas, Rect bounds, double padding)
+    // [2026-03-25 修正] 透過背景フラグを追加
+    public void ExportToClipboard(UIElement canvas, Rect bounds, double padding,
+                                  bool transparentBackground = false)
     {
         try
         {
-            _exportService.CopyToClipboard(canvas, bounds, padding);
+            _exportService.CopyToClipboard(canvas, bounds, padding, transparentBackground);
             StatusMessage = "クリップボードにコピーしました";
         }
         catch (Exception ex)

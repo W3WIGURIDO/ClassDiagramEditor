@@ -10,9 +10,15 @@
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <!-- Row 0: エクスポート形式 -->
             <RowDefinition Height="Auto"/>
+            <!-- Row 1: 余白設定 -->
             <RowDefinition Height="Auto"/>
+            <!-- Row 2: 背景透過オプション ← 新規追加 -->
             <RowDefinition Height="Auto"/>
+            <!-- Row 3: クリップボード注記 -->
+            <RowDefinition Height="Auto"/>
+            <!-- Row 4: ボタン -->
         </Grid.RowDefinitions>
 
         <!-- エクスポート形式 -->
@@ -60,9 +66,16 @@
                            FontSize="13"/>
             </Grid>
         </StackPanel>
+        <!-- [2026-03-25 追加] 背景・グリッド透過オプション（PNG・クリップボード時のみ有効） -->
+        <StackPanel Grid.Row="2" Margin="0,0,0,15">
+            <CheckBox x:Name="TransparentBackgroundCheckBox"
+              Content="背景・グリッドを透過する（PNG・クリップボードのみ）"
+              FontSize="13"
+              IsChecked="False"/>
+        </StackPanel>
 
         <!-- クリップボード選択時の注記 -->
-        <Border Grid.Row="2"
+        <Border Grid.Row="3"
                 x:Name="ClipboardNote"
                 Background="#E3F2FD"
                 Padding="10"
@@ -78,7 +91,7 @@
         </Border>
 
         <!-- ボタン -->
-        <StackPanel Grid.Row="3"
+        <StackPanel Grid.Row="4"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right">
             <Button Content="エクスポート"

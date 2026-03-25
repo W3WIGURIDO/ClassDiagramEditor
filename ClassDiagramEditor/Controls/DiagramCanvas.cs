@@ -918,6 +918,32 @@ public class DiagramCanvas : Canvas
         _relationSourceClass = null;
         InvalidateVisual();
     }
+
+    // [2026-03-25 追加] エクスポート時に背景・グリッドを一時的に非表示にするメソッド群
+
+    /// <summary>
+    /// 背景・グリッドを透明に切り替えてアクションを実行し、元に戻す
+    /// </summary>
+    // [2026-03-25 修正] 透過フラグが false の場合は背景を切り替えずそのまま実行
+    public void RunWithTransparentBackground(Action action, bool transparent)
+    {
+        if (!transparent)
+        {
+            action();
+            return;
+        }
+
+        var previousBackground = Background;
+        Background = Brushes.Transparent;
+        try
+        {
+            action();
+        }
+        finally
+        {
+            Background = previousBackground;
+        }
+    }
 }
 
 /// <summary>

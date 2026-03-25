@@ -308,14 +308,15 @@ public class PointJsonConverter : JsonConverter<Point>
 /// </summary>
 public class ExportService
 {
-    // [2026-03-24 修正] バウンディングボックス範囲のみをPNGエクスポート
-    public void ExportToPng(UIElement element, string filePath, Rect bounds, double padding)
+    // [2026-03-25 修正] 透過背景オプションを追加
+    public void ExportToPng(UIElement element, string filePath, Rect bounds, double padding,
+                            bool transparentBackground = false)
     {
         try
         {
             var (renderWidth, renderHeight, translateX, translateY) = CalcRenderParams(bounds, padding);
-
-            var renderBitmap = RenderToBitmap(element, renderWidth, renderHeight, translateX, translateY);
+            var renderBitmap = RenderToBitmap(element, renderWidth, renderHeight,
+                                              translateX, translateY, transparentBackground);
 
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(renderBitmap));
@@ -345,19 +346,56 @@ public class ExportService
         }
     }
 
-    // [2026-03-24 修正] バウンディングボックス範囲のみをクリップボードへコピー
-    public void CopyToClipboard(UIElement element, Rect bounds, double padding)
+    // [2026-03-25 修正] 透過背景オプションを追加
+    public void CopyToClipboard(UIElement element, Rect bounds, double padding,
+                                bool transparentBackground = false)
     {
         try
         {
             var (renderWidth, renderHeight, translateX, translateY) = CalcRenderParams(bounds, padding);
-            var renderBitmap = RenderToBitmap(element, renderWidth, renderHeight, translateX, translateY);
+            var renderBitmap = RenderToBitmap(element, renderWidth, renderHeight,
+                                              translateX, translateY, transparentBackground);
             Clipboard.SetImage(renderBitmap);
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Failed to copy to clipboard: {ex.Message}", ex);
         }
+    }
+
+
+    // [2026-03-25 修正] 透過フラグに応じて白背景の描画を切り替え
+    private static RenderTargetBitmap RenderToBitmap(
+        UIElement element, int width, int height,
+        double translateX, double translateY,
+        bool transparentBackground = false)
+    {
+        var renderBitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+
+        var drawingVisual = new DrawingVisual();
+        using (var ctx = drawingVisual.RenderOpen())
+        {
+            // [2026-03-25 修正] 透過指定がない場合のみ白背景を描画
+            if (!transparentBackground)
+            {
+                ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+            }
+
+            var brush = new VisualBrush(element)
+            {
+                Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                Viewbox = new Rect(-translateX, -translateY, width, height),
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewport = new Rect(0, 0, width, height),
+                ViewportUnits = BrushMappingMode.Absolute
+            };
+            ctx.DrawRectangle(brush, null, new Rect(0, 0, width, height));
+        }
+
+        renderBitmap.Render(drawingVisual);
+        return renderBitmap;
     }
 
     // [2026-03-24 追加] バウンディングボックス + 余白からレンダリングパラメータを計算
@@ -375,37 +413,6 @@ public class ExportService
         double translateY = -bounds.Y + padding;
 
         return (width, height, translateX, translateY);
-    }
-
-    // [2026-03-24 追加] VisualBrushを使ってUIElementの指定範囲をビットマップにレンダリング
-    private static RenderTargetBitmap RenderToBitmap(
-        UIElement element, int width, int height, double translateX, double translateY)
-    {
-        var renderBitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-
-        var drawingVisual = new DrawingVisual();
-        using (var ctx = drawingVisual.RenderOpen())
-        {
-            // 白背景
-            ctx.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
-
-            // 対象要素をオフセットしてレンダリング
-            var brush = new VisualBrush(element)
-            {
-                Stretch = Stretch.None,
-                AlignmentX = AlignmentX.Left,
-                AlignmentY = AlignmentY.Top,
-                // バウンディングボックス分だけずらす
-                Viewbox = new Rect(-translateX, -translateY, width, height),
-                ViewboxUnits = BrushMappingMode.Absolute,
-                Viewport = new Rect(0, 0, width, height),
-                ViewportUnits = BrushMappingMode.Absolute
-            };
-            ctx.DrawRectangle(brush, null, new Rect(0, 0, width, height));
-        }
-
-        renderBitmap.Render(drawingVisual);
-        return renderBitmap;
     }
 
     // [2026-03-24 追加] DiagramModelからSVGを完全生成する
