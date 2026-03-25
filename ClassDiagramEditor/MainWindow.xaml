@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ClassDiagramEditor"
         xmlns:controls="clr-namespace:ClassDiagramEditor.Controls"
+        xmlns:models="clr-namespace:ClassDiagramEditor.Models"
         mc:Ignorable="d"
         Title="Class Diagram Editor - 新規作成"
         Height="850" 
@@ -290,13 +291,15 @@
 
                                 <!-- 種類 -->
                                 <TextBlock Text="種類" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
-                                <ComboBox SelectedIndex="{Binding Type}" 
-                                          Padding="8" 
-                                          FontSize="13"
-                                          BorderBrush="#CCCCCC">
-                                    <ComboBoxItem Content="クラス"/>
-                                    <ComboBoxItem Content="インターフェース"/>
-                                    <ComboBoxItem Content="抽象クラス"/>
+                                <!-- [2026-03-25 修正] SelectedIndex→SelectedValue+Tagに変更。ClassType enum の双方向バインドエラー解消 -->
+                                <ComboBox SelectedValue="{Binding Type}" 
+                                      SelectedValuePath="Tag"
+                                      Padding="8" 
+                                      FontSize="13"
+                                      BorderBrush="#CCCCCC">
+                                    <ComboBoxItem Content="クラス" Tag="{x:Static models:ClassType.Class}"/>
+                                    <ComboBoxItem Content="インターフェース" Tag="{x:Static models:ClassType.Interface}"/>
+                                    <ComboBoxItem Content="抽象クラス" Tag="{x:Static models:ClassType.AbstractClass}"/>
                                 </ComboBox>
 
                                 <!-- 属性 -->
