@@ -44,6 +44,7 @@ public class DiagramCanvas : Canvas
     public DiagramCanvas()
     {
         // [2026-03-25 修正] グリッドは親Rectangleに移動したためWhiteのみ設定
+        // Transparent にしないこと（起動時から背景が消える原因になる）
         Background = Brushes.White;
         Loaded += OnLoaded;
         MouseLeftButtonDown += OnMouseLeftButtonDown;
