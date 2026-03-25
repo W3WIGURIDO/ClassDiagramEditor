@@ -232,13 +232,14 @@
                             </Rectangle.Fill>
                         </Rectangle>
 
-                        <!-- DiagramCanvas本体（Background は White のみ、グリッドは持たない） -->
+                        <!-- DiagramCanvas本体（BackgroundはTransparent、グリッドは親Rectangleが担当） -->
+                        <!-- [2026-03-25 修正] Background="White"を削除しGridBackgroundが透けて見えるようにする -->
                         <controls:DiagramCanvas x:Name="DiagramCanvas" 
-                        Width="3000" 
-                        Height="3000"
-                        DataContext="{Binding}"
-                        ClipToBounds="True"
-                        Background="White"/>
+        Width="3000" 
+        Height="3000"
+        DataContext="{Binding}"
+        ClipToBounds="True"
+        Background="Transparent"/>
                     </Grid>
                 </ScrollViewer>
             </Border>

@@ -166,6 +166,7 @@ public partial class MainWindow : Window
     }
 
     // [2026-03-25 修正] 透過エクスポート時にグリッド背景Rectangleも非表示にする
+    // DiagramCanvasのBackgroundは変更せず、GridBackgroundの表示制御のみ行う
     private void RunExportWithTransparentBackground(Action action, bool transparent)
     {
         if (!transparent)
@@ -177,12 +178,14 @@ public partial class MainWindow : Window
         // グリッド背景レイヤーを非表示
         GridBackground.Visibility = Visibility.Hidden;
 
-        DiagramCanvas.RunWithTransparentBackground(() =>
+        try
         {
-            action();
-        }, transparent);
-
-        // 元に戻す
-        GridBackground.Visibility = Visibility.Visible;
+            DiagramCanvas.RunWithTransparentBackground(action, transparent);
+        }
+        finally
+        {
+            // 例外発生時も確実に元に戻す
+            GridBackground.Visibility = Visibility.Visible;
+        }
     }
 }

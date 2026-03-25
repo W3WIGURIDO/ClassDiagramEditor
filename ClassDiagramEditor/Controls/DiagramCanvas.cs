@@ -43,9 +43,9 @@ public class DiagramCanvas : Canvas
 
     public DiagramCanvas()
     {
-        // [2026-03-25 修正] グリッドは親Rectangleに移動したためWhiteのみ設定
-        // Transparent にしないこと（起動時から背景が消える原因になる）
-        Background = Brushes.White;
+        // [2026-03-25 修正] BackgroundをTransparentにして背景レイヤーのGridBackgroundを透過表示させる
+        // エクスポート時の透過処理はRunWithTransparentBackgroundで制御するため起動時は常にTransparent
+        Background = Brushes.Transparent;
         Loaded += OnLoaded;
         MouseLeftButtonDown += OnMouseLeftButtonDown;
         MouseMove += OnMouseMove;
@@ -926,27 +926,11 @@ public class DiagramCanvas : Canvas
     /// <summary>
     /// 背景・グリッドを透明に切り替えてアクションを実行し、元に戻す
     /// </summary>
-    // [2026-03-25 修正] DiagramCanvas自身のWhite背景のみ透過すればよい
-    // グリッドはMainWindow.xaml側のRectangleに分離済みのため、
-    // MainWindow側でGridBackgroundも非表示にする必要がある
+    // [2026-03-25 修正] DiagramCanvas自体はTransparentのままなのでBackground変更は不要
+    // GridBackgroundの非表示制御はMainWindow側で行うため、ここではactionを実行するのみ
     public void RunWithTransparentBackground(Action action, bool transparent)
     {
-        if (!transparent)
-        {
-            action();
-            return;
-        }
-
-        var previousBackground = Background;
-        Background = Brushes.Transparent;
-        try
-        {
-            action();
-        }
-        finally
-        {
-            Background = previousBackground;
-        }
+        action();
     }
 }
 
