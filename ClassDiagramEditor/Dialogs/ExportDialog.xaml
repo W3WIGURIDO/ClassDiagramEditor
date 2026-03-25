@@ -14,17 +14,14 @@
             <RowDefinition Height="Auto"/>
             <!-- Row 1: 余白設定 -->
             <RowDefinition Height="Auto"/>
-            <!-- Row 2: 背景透過オプション ← 新規追加 -->
+            <!-- Row 2: クリップボード注記 -->
             <RowDefinition Height="Auto"/>
-            <!-- Row 3: クリップボード注記 -->
-            <RowDefinition Height="Auto"/>
-            <!-- Row 4: ボタン -->
+            <!-- Row 3: ボタン -->
         </Grid.RowDefinitions>
 
         <!-- エクスポート形式 -->
         <StackPanel Grid.Row="0" Margin="0,0,0,15">
             <TextBlock Text="エクスポート形式" FontWeight="SemiBold" Margin="0,0,0,8" FontSize="13"/>
-            <!-- [2026-03-24 追加] PNG・SVG・クリップボードの選択ラジオボタン -->
             <RadioButton x:Name="RadioPng"
                          Content="PNG 画像 (.png)"
                          IsChecked="True"
@@ -45,7 +42,6 @@
         <!-- 余白設定 -->
         <StackPanel Grid.Row="1" Margin="0,0,0,15">
             <TextBlock Text="余白 (px)" FontWeight="SemiBold" Margin="0,0,0,8" FontSize="13"/>
-            <!-- [2026-03-24 追加] バウンディングボックスに追加する余白のスライダー -->
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -66,16 +62,9 @@
                            FontSize="13"/>
             </Grid>
         </StackPanel>
-        <!-- [2026-03-25 追加] 背景・グリッド透過オプション（PNG・クリップボード時のみ有効） -->
-        <StackPanel Grid.Row="2" Margin="0,0,0,15">
-            <CheckBox x:Name="TransparentBackgroundCheckBox"
-              Content="背景・グリッドを透過する（PNG・クリップボードのみ）"
-              FontSize="13"
-              IsChecked="False"/>
-        </StackPanel>
 
         <!-- クリップボード選択時の注記 -->
-        <Border Grid.Row="3"
+        <Border Grid.Row="2"
                 x:Name="ClipboardNote"
                 Background="#E3F2FD"
                 Padding="10"
@@ -91,7 +80,7 @@
         </Border>
 
         <!-- ボタン -->
-        <StackPanel Grid.Row="4"
+        <StackPanel Grid.Row="3"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right">
             <Button Content="エクスポート"

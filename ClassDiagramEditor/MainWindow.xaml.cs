@@ -101,10 +101,10 @@ public partial class MainWindow : Window
                     };
                     if (saveDialog.ShowDialog() == true)
                     {
+                        // [2026-03-25 修正] 透過背景フラグ引数を廃止。常にグリッド透過で出力
                         RunExportWithTransparentBackground(() =>
-                            _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad,
-                                                   result.TransparentBackground),
-                            result.TransparentBackground);
+                            _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad),
+                            transparent: true);
                     }
                     break;
                 }
@@ -121,10 +121,10 @@ public partial class MainWindow : Window
                     break;
                 }
             case Dialogs.ExportFormat.Clipboard:
+                // [2026-03-25 修正] 透過背景フラグ引数を廃止。常にグリッド透過で出力
                 RunExportWithTransparentBackground(() =>
-                    _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad,
-                                                 result.TransparentBackground),
-                    result.TransparentBackground);
+                    _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad),
+                    transparent: true);
                 break;
         }
     }
