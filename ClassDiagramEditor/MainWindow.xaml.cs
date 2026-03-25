@@ -88,7 +88,7 @@ public partial class MainWindow : Window
         var result = dialog.Result;
         double pad = result.Padding;
 
-        // [2026-03-25 修正] 透過背景フラグをダイアログ結果から取得し各エクスポートメソッドへ渡す
+        // [2026-03-25 修正] グリッド背景も含めて透過処理をRunExportWithTransparentBackground経由に統一
         switch (result.Format)
         {
             case Dialogs.ExportFormat.Png:
@@ -101,8 +101,7 @@ public partial class MainWindow : Window
                     };
                     if (saveDialog.ShowDialog() == true)
                     {
-                        // 透過指定時はキャンバス背景を一時的に透明化してレンダリング
-                        DiagramCanvas.RunWithTransparentBackground(() =>
+                        RunExportWithTransparentBackground(() =>
                             _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad,
                                                    result.TransparentBackground),
                             result.TransparentBackground);
@@ -122,8 +121,7 @@ public partial class MainWindow : Window
                     break;
                 }
             case Dialogs.ExportFormat.Clipboard:
-                // 透過指定時はキャンバス背景を一時的に透明化してレンダリング
-                DiagramCanvas.RunWithTransparentBackground(() =>
+                RunExportWithTransparentBackground(() =>
                     _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad,
                                                  result.TransparentBackground),
                     result.TransparentBackground);
@@ -165,5 +163,26 @@ public partial class MainWindow : Window
             _viewModel.Diagram.MarkAsModified();
             _viewModel.StatusMessage = $"メソッド '{dialog.Result.Name}' を追加しました";
         }
+    }
+
+    // [2026-03-25 修正] 透過エクスポート時にグリッド背景Rectangleも非表示にする
+    private void RunExportWithTransparentBackground(Action action, bool transparent)
+    {
+        if (!transparent)
+        {
+            action();
+            return;
+        }
+
+        // グリッド背景レイヤーを非表示
+        GridBackground.Visibility = Visibility.Hidden;
+
+        DiagramCanvas.RunWithTransparentBackground(() =>
+        {
+            action();
+        }, transparent);
+
+        // 元に戻す
+        GridBackground.Visibility = Visibility.Visible;
     }
 }

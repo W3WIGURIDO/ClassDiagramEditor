@@ -202,18 +202,18 @@
             <!-- 中央パネル: キャンバス -->
             <Border Grid.Column="1" Background="#FAFAFA">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" 
-                              VerticalScrollBarVisibility="Auto">
+                  VerticalScrollBarVisibility="Auto">
                     <Grid>
                         <Grid.LayoutTransform>
                             <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
                         </Grid.LayoutTransform>
 
-                        <controls:DiagramCanvas x:Name="DiagramCanvas" 
-                                                Width="3000" 
-                                                Height="3000"
-                                                DataContext="{Binding}"
-                                                ClipToBounds="True">
-                            <controls:DiagramCanvas.Background>
+                        <!-- [2026-03-25 修正] グリッド背景を DiagramCanvas から分離し専用レイヤーに移動 -->
+                        <!-- グリッド模様レイヤー（エクスポート時に非表示にする対象） -->
+                        <Rectangle x:Name="GridBackground"
+                       Width="3000"
+                       Height="3000">
+                            <Rectangle.Fill>
                                 <DrawingBrush TileMode="Tile" Viewport="0,0,25,25" ViewportUnits="Absolute">
                                     <DrawingBrush.Drawing>
                                         <GeometryDrawing>
@@ -229,12 +229,20 @@
                                         </GeometryDrawing>
                                     </DrawingBrush.Drawing>
                                 </DrawingBrush>
-                            </controls:DiagramCanvas.Background>
-                        </controls:DiagramCanvas>
+                            </Rectangle.Fill>
+                        </Rectangle>
+
+                        <!-- DiagramCanvas本体（Background は White のみ、グリッドは持たない） -->
+                        <controls:DiagramCanvas x:Name="DiagramCanvas" 
+                                    Width="3000" 
+                                    Height="3000"
+                                    DataContext="{Binding}"
+                                    ClipToBounds="True"
+                                    Background="White"/>
                     </Grid>
                 </ScrollViewer>
             </Border>
-
+            
             <!-- 右パネル: プロパティ -->
             <Border Grid.Column="2" 
                     Background="White" 
