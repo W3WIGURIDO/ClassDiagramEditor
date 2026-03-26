@@ -452,6 +452,8 @@ public class ExportService
         // クラスボックスのサイズ計算用定数
         const double classMinWidth = 150;
         const double classHeaderH = 35;
+        // [2026-03-26 追加] ステレオタイプ表示時の追加ヘッダー高さ（ClassBoxVisualと合わせる）
+        const double stereotypeExtraH = 14;
         const double classLineH = 20;
         const double classPad = 10;
         const double fontSize = 11;
@@ -460,7 +462,11 @@ public class ExportService
         var sizeMap = new Dictionary<Guid, (double w, double h)>();
         foreach (var cls in classes)
         {
-            double h = classHeaderH;
+            // [2026-03-26 修正] ステレオタイプがある場合はヘッダー高さを増やす
+            bool hasStereotype = !string.IsNullOrEmpty(cls.TypeDisplayText);
+            double headerH = classHeaderH + (hasStereotype ? stereotypeExtraH : 0);
+
+            double h = headerH;
             if (cls.Attributes.Count > 0) h += classPad + cls.Attributes.Count * classLineH;
             if (cls.Methods.Count > 0) h += classPad + cls.Methods.Count * classLineH;
             h += classPad;
@@ -535,21 +541,25 @@ public class ExportService
             sb.AppendLine($"""  <rect x="{bx:F1}" y="{by:F1}" width="{bw:F1}" height="{bh:F1}" fill="{bgColor}" stroke="black" stroke-width="2"/>""");
 
             // ヘッダー背景
-            sb.AppendLine($"""  <rect x="{bx:F1}" y="{by:F1}" width="{bw:F1}" height="{classHeaderH:F1}" fill="#C8C8C8"/>""");
+            // [2026-03-26 修正] ステレオタイプの有無に応じたヘッダー高さを使用
+            bool clsHasStereotype = !string.IsNullOrEmpty(cls.TypeDisplayText);
+            double clsHeaderH = classHeaderH + (clsHasStereotype ? stereotypeExtraH : 0);
+            sb.AppendLine($"""  <rect x="{bx:F1}" y="{by:F1}" width="{bw:F1}" height="{clsHeaderH:F1}" fill="#C8C8C8"/>""");
 
             // ステレオタイプ
             double textY = by + 3;
             if (!string.IsNullOrEmpty(cls.TypeDisplayText))
             {
                 sb.AppendLine($"""  <text x="{bx + classPad:F1}" y="{textY + 10:F1}" font-family="Segoe UI" font-size="10" font-style="italic">{SvgEscape(cls.TypeDisplayText)}</text>""");
-                textY += 12;
+                textY += stereotypeExtraH;
             }
 
             // クラス名
             string nameStyle = cls.Type == ClassType.AbstractClass ? " font-style=\"italic\"" : "";
             sb.AppendLine($"""  <text x="{bx + classPad:F1}" y="{textY + 18:F1}" font-family="Segoe UI" font-size="14" font-weight="bold"{nameStyle}>{SvgEscape(cls.Name)}</text>""");
 
-            double curY = by + classHeaderH;
+            // [2026-03-26 修正] 動的なヘッダー高さで区切り線を描画
+            double curY = by + clsHeaderH;
 
             // 区切り線（属性の上）
             sb.AppendLine($"""  <line x1="{bx:F1}" y1="{curY:F1}" x2="{bx + bw:F1}" y2="{curY:F1}" stroke="black" stroke-width="1"/>""");

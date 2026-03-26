@@ -487,6 +487,8 @@ public class MainViewModel : ViewModelBase
         // 暫定サイズ（ClassBoxVisualの計算と合わせる）
         const double classMinWidth = 150;
         const double classHeaderH = 35;
+        // [2026-03-26 追加] ステレオタイプ表示時の追加ヘッダー高さ（ClassBoxVisualと合わせる）
+        const double stereotypeExtraH = 14;
         const double classLineH = 20;
         const double classPad = 10;
 
@@ -495,7 +497,11 @@ public class MainViewModel : ViewModelBase
 
         foreach (var cls in _diagram.Classes)
         {
-            double h = classHeaderH;
+            // [2026-03-26 修正] ステレオタイプがある場合はヘッダー高さを増やす
+            bool hasStereotype = cls.Type != Models.ClassType.Class;
+            double headerH = classHeaderH + (hasStereotype ? stereotypeExtraH : 0);
+
+            double h = headerH;
             if (cls.Attributes.Count > 0) h += classPad + cls.Attributes.Count * classLineH;
             if (cls.Methods.Count > 0) h += classPad + cls.Methods.Count * classLineH;
             h += classPad;
