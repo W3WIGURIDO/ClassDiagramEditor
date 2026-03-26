@@ -1034,7 +1034,8 @@ public class ClassBoxVisual
     public double Width { get; private set; } = MinWidth;
     public double Height { get; private set; } = HeaderHeight;
 
-    // [2026-03-26 修正] FormattedTextで各テキストの実幅を測定してボックス幅を自動調整
+    // [2026-03-26 修正] 属性・メソッドのMeasureTextWidthをConsolasに変更し
+    // SVGのfont-family="Consolas,monospace"と一致させる
     private void CalculateSize(ClassModel model)
     {
         double headerHeight = GetHeaderHeight(model);
@@ -1052,52 +1053,50 @@ public class ClassBoxVisual
 
         Height += Padding;
 
-        // [2026-03-26 修正] テキスト幅を実測してボックス幅を決定
         double requiredWidth = MinWidth;
 
-        // ステレオタイプ幅
+        // ステレオタイプ幅（Segoe UI）
         if (!string.IsNullOrEmpty(model.TypeDisplayText))
         {
             requiredWidth = Math.Max(requiredWidth,
-                MeasureTextWidth(model.TypeDisplayText, 10, FontStyles.Italic, FontWeights.Normal)
+                MeasureTextWidth(model.TypeDisplayText, 10, "Segoe UI", FontStyles.Italic, FontWeights.Normal)
                 + Padding * 2);
         }
 
-        // クラス名幅
+        // クラス名幅（Segoe UI）
         var nameFontStyle = model.Type == ClassType.AbstractClass
             ? FontStyles.Italic : FontStyles.Normal;
         requiredWidth = Math.Max(requiredWidth,
-            MeasureTextWidth(model.Name, 14, nameFontStyle, FontWeights.Bold)
+            MeasureTextWidth(model.Name, 14, "Segoe UI", nameFontStyle, FontWeights.Bold)
             + Padding * 2);
 
-        // 属性幅
+        // [2026-03-26 修正] 属性・メソッド幅をConsolasで測定（SVGと一致させる）
         foreach (var attr in model.Attributes)
         {
             requiredWidth = Math.Max(requiredWidth,
-                MeasureTextWidth(attr.DisplayText, 11, FontStyles.Normal, FontWeights.Normal)
+                MeasureTextWidth(attr.DisplayText, 11, "Consolas", FontStyles.Normal, FontWeights.Normal)
                 + Padding * 2);
         }
 
-        // メソッド幅
         foreach (var method in model.Methods)
         {
             requiredWidth = Math.Max(requiredWidth,
-                MeasureTextWidth(method.DisplayText, 11, FontStyles.Normal, FontWeights.Normal)
+                MeasureTextWidth(method.DisplayText, 11, "Consolas", FontStyles.Normal, FontWeights.Normal)
                 + Padding * 2);
         }
 
         Width = requiredWidth;
     }
 
-    // [2026-03-26 追加] FormattedTextを使用してテキストの実幅を測定する
-    private static double MeasureTextWidth(string text, double fontSize,
+    // [2026-03-26 修正] フォントファミリーを引数で受け取る形式に変更
+    private static double MeasureTextWidth(string text, double fontSize, string fontFamily,
         FontStyle fontStyle, FontWeight fontWeight)
     {
         var formattedText = new FormattedText(
             text,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), fontStyle, fontWeight, FontStretches.Normal),
+            new Typeface(new FontFamily(fontFamily), fontStyle, fontWeight, FontStretches.Normal),
             fontSize,
             Brushes.Black,
             1.0
@@ -1190,7 +1189,9 @@ public class ClassBoxVisual
             currentY += Padding / 2;
             foreach (var attr in model.Attributes)
             {
-                DrawText(dc, attr.DisplayText, position.X + Padding, currentY, 11);
+                // [2026-03-26 修正] ConsolasフォントでDrawText（SVGと一致させる）
+                DrawText(dc, attr.DisplayText, position.X + Padding, currentY, 11,
+                    fontFamily: "Consolas");
                 currentY += LineHeight;
             }
             currentY += Padding / 2;
@@ -1205,7 +1206,9 @@ public class ClassBoxVisual
             currentY += Padding / 2;
             foreach (var method in model.Methods)
             {
-                DrawText(dc, method.DisplayText, position.X + Padding, currentY, 11);
+                // [2026-03-26 修正] ConsolasフォントでDrawText（SVGと一致させる）
+                DrawText(dc, method.DisplayText, position.X + Padding, currentY, 11,
+                    fontFamily: "Consolas");
                 currentY += LineHeight;
             }
         }
@@ -1233,9 +1236,10 @@ public class ClassBoxVisual
             new Point(position.X + width, position.Y + height), cornerSize / 2, cornerSize / 2);
     }
 
+    // [2026-03-26 修正] fontFamilyを引数で受け取る形式に変更
     private static void DrawText(DrawingContext dc, string text, double x, double y,
         double fontSize, FontStyle fontStyle = default, FontWeight fontWeight = default,
-        Brush? textBrush = null)
+        Brush? textBrush = null, string fontFamily = "Segoe UI")
     {
         fontWeight = fontWeight == default ? FontWeights.Normal : fontWeight;
         fontStyle = fontStyle == default ? FontStyles.Normal : fontStyle;
@@ -1245,7 +1249,7 @@ public class ClassBoxVisual
             text,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Segoe UI"), fontStyle, fontWeight, FontStretches.Normal),
+            new Typeface(new FontFamily(fontFamily), fontStyle, fontWeight, FontStretches.Normal),
             fontSize,
             textBrush,
             1.0
