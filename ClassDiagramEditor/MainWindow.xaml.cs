@@ -1,6 +1,7 @@
 ﻿using ClassDiagramEditor.Dialogs;
 using ClassDiagramEditor.ViewModels;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace ClassDiagramEditor;
@@ -20,7 +21,6 @@ public partial class MainWindow : Window
 
         Loaded += MainWindow_Loaded;
 
-        // ← キーボードイベントを追加
         KeyDown += MainWindow_KeyDown;
     }
 
@@ -28,21 +28,18 @@ public partial class MainWindow : Window
     {
         if (_viewModel == null) return;
 
-        // Ctrl+A: すべて選択
         if (e.Key == Key.A && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
             _viewModel.SelectAllClasses();
             DiagramCanvas.InvalidateVisual();
             e.Handled = true;
         }
-        // Escape: 選択解除
         else if (e.Key == Key.Escape)
         {
             _viewModel.ClearSelection();
             DiagramCanvas.InvalidateVisual();
             e.Handled = true;
         }
-        // Delete: 選択削除
         else if (e.Key == Key.Delete)
         {
             if (_viewModel.SelectedClasses.Count > 0)
@@ -63,17 +60,14 @@ public partial class MainWindow : Window
             _viewModel.SelectedClassChanged += (s, classModel) =>
                 DiagramCanvas.InvalidateVisual();
 
-            // [2026-03-24 追加] エクスポートダイアログ要求イベントを購読
             _viewModel.ExportRequested += ViewModel_ExportRequested;
         }
     }
 
-    // [2026-03-24 追加] エクスポートダイアログを開いて形式に応じた処理を実行
     private void ViewModel_ExportRequested(object? sender, EventArgs e)
     {
         if (_viewModel == null) return;
 
-        // クラスが1つもない場合は警告
         var bounds = _viewModel.GetDiagramBounds();
         if (bounds.IsEmpty)
         {
@@ -88,7 +82,6 @@ public partial class MainWindow : Window
         var result = dialog.Result;
         double pad = result.Padding;
 
-        // [2026-03-25 修正] グリッド背景も含めて透過処理をRunExportWithTransparentBackground経由に統一
         switch (result.Format)
         {
             case Dialogs.ExportFormat.Png:
@@ -101,7 +94,6 @@ public partial class MainWindow : Window
                     };
                     if (saveDialog.ShowDialog() == true)
                     {
-                        // [2026-03-25 修正] 透過背景フラグ引数を廃止。常にグリッド透過で出力
                         RunExportWithTransparentBackground(() =>
                             _viewModel.ExportToPng(DiagramCanvas, saveDialog.FileName, bounds, pad),
                             transparent: true);
@@ -121,7 +113,6 @@ public partial class MainWindow : Window
                     break;
                 }
             case Dialogs.ExportFormat.Clipboard:
-                // [2026-03-25 修正] 透過背景フラグ引数を廃止。常にグリッド透過で出力
                 RunExportWithTransparentBackground(() =>
                     _viewModel.ExportToClipboard(DiagramCanvas, bounds, pad),
                     transparent: true);
@@ -165,8 +156,122 @@ public partial class MainWindow : Window
         }
     }
 
-    // [2026-03-25 修正] 透過エクスポート時にグリッド背景Rectangleも非表示にする
-    // DiagramCanvasのBackgroundは変更せず、GridBackgroundの表示制御のみ行う
+    // [2026-03-26 追加] 属性リストのダブルクリックで編集ダイアログを開く
+    private void AttributeListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem is Models.AttributeModel attr)
+        {
+            OpenEditAttributeDialog(attr);
+        }
+    }
+
+    // [2026-03-26 追加] 属性の右クリックメニュー「編集」から編集ダイアログを開く
+    private void EditAttribute_Click(object sender, RoutedEventArgs e)
+    {
+        if (AttributeListBox.SelectedItem is Models.AttributeModel attr)
+        {
+            OpenEditAttributeDialog(attr);
+        }
+    }
+
+    // [2026-03-26 追加] 属性編集ダイアログを開いて結果を反映する共通処理
+    private void OpenEditAttributeDialog(Models.AttributeModel attr)
+    {
+        if (_viewModel?.SelectedClass == null) return;
+
+        var dialog = new AddAttributeDialog(attr)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            // 編集モードでは既存オブジェクトを直接更新しているため
+            // CollectionChangedは発火しない。InvalidateVisualで再描画する
+            _viewModel.Diagram.MarkAsModified();
+            _viewModel.StatusMessage = $"属性 '{attr.Name}' を編集しました";
+            DiagramCanvas.InvalidateVisual();
+        }
+    }
+
+    // [2026-03-26 追加] 属性の右クリックメニュー「削除」で選択中の属性を削除する
+    private void DeleteAttribute_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel?.SelectedClass == null) return;
+        if (AttributeListBox.SelectedItem is not Models.AttributeModel attr) return;
+
+        var result = MessageBox.Show(
+            $"属性 '{attr.Name}' を削除しますか？",
+            "属性の削除",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.OK)
+        {
+            _viewModel.SelectedClass.Attributes.Remove(attr);
+            _viewModel.Diagram.MarkAsModified();
+            _viewModel.StatusMessage = $"属性 '{attr.Name}' を削除しました";
+        }
+    }
+
+    // [2026-03-26 追加] メソッドリストのダブルクリックで編集ダイアログを開く
+    private void MethodListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListBox listBox && listBox.SelectedItem is Models.MethodModel method)
+        {
+            OpenEditMethodDialog(method);
+        }
+    }
+
+    // [2026-03-26 追加] メソッドの右クリックメニュー「編集」から編集ダイアログを開く
+    private void EditMethod_Click(object sender, RoutedEventArgs e)
+    {
+        if (MethodListBox.SelectedItem is Models.MethodModel method)
+        {
+            OpenEditMethodDialog(method);
+        }
+    }
+
+    // [2026-03-26 追加] メソッド編集ダイアログを開いて結果を反映する共通処理
+    private void OpenEditMethodDialog(Models.MethodModel method)
+    {
+        if (_viewModel?.SelectedClass == null) return;
+
+        var dialog = new AddMethodDialog(method)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            // 編集モードでは既存オブジェクトを直接更新しているため
+            // CollectionChangedは発火しない。InvalidateVisualで再描画する
+            _viewModel.Diagram.MarkAsModified();
+            _viewModel.StatusMessage = $"メソッド '{method.Name}' を編集しました";
+            DiagramCanvas.InvalidateVisual();
+        }
+    }
+
+    // [2026-03-26 追加] メソッドの右クリックメニュー「削除」で選択中のメソッドを削除する
+    private void DeleteMethod_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel?.SelectedClass == null) return;
+        if (MethodListBox.SelectedItem is not Models.MethodModel method) return;
+
+        var result = MessageBox.Show(
+            $"メソッド '{method.Name}' を削除しますか？",
+            "メソッドの削除",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.OK)
+        {
+            _viewModel.SelectedClass.Methods.Remove(method);
+            _viewModel.Diagram.MarkAsModified();
+            _viewModel.StatusMessage = $"メソッド '{method.Name}' を削除しました";
+        }
+    }
+
     private void RunExportWithTransparentBackground(Action action, bool transparent)
     {
         if (!transparent)
@@ -175,7 +280,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // グリッド背景レイヤーを非表示
         GridBackground.Visibility = Visibility.Hidden;
 
         try
@@ -184,7 +288,6 @@ public partial class MainWindow : Window
         }
         finally
         {
-            // 例外発生時も確実に元に戻す
             GridBackground.Visibility = Visibility.Visible;
         }
     }

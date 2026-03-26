@@ -5,16 +5,40 @@ using ClassDiagramEditor.Models;
 namespace ClassDiagramEditor.Dialogs;
 
 /// <summary>
-/// メソッド追加ダイアログ
+/// メソッド追加・編集ダイアログ
 /// </summary>
 public partial class AddMethodDialog : Window
 {
     public MethodModel? Result { get; private set; }
 
+    // [2026-03-26 追加] 編集対象の既存メソッド（新規追加時はnull）
+    private readonly MethodModel? _editTarget;
+
     public AddMethodDialog()
     {
         InitializeComponent();
         NameTextBox.Focus();
+    }
+
+    // [2026-03-26 追加] 編集モード用コンストラクタ。既存メソッドの値をフォームに反映する
+    public AddMethodDialog(MethodModel editTarget) : this()
+    {
+        _editTarget = editTarget;
+        Title = "メソッドを編集";
+
+        NameTextBox.Text = editTarget.Name;
+        ReturnTypeComboBox.Text = editTarget.ReturnType;
+
+        // アクセス修飾子の初期選択をeditTargetに合わせる
+        foreach (ComboBoxItem item in AccessModifierComboBox.Items)
+        {
+            if (string.Equals(item.Content?.ToString(), editTarget.AccessModifier.ToString(),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                AccessModifierComboBox.SelectedItem = item;
+                break;
+            }
+        }
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
@@ -36,12 +60,23 @@ public partial class AddMethodDialog : Window
         var accessModifier = ParseAccessModifier(
             (AccessModifierComboBox.SelectedItem as ComboBoxItem)?.Content?.ToString());
 
-        Result = new MethodModel
+        // [2026-03-26 修正] 編集モード時は既存オブジェクトを直接更新してResultに設定する
+        if (_editTarget != null)
         {
-            Name = name,
-            ReturnType = returnType,
-            AccessModifier = accessModifier
-        };
+            _editTarget.Name = name;
+            _editTarget.ReturnType = returnType;
+            _editTarget.AccessModifier = accessModifier;
+            Result = _editTarget;
+        }
+        else
+        {
+            Result = new MethodModel
+            {
+                Name = name,
+                ReturnType = returnType,
+                AccessModifier = accessModifier
+            };
+        }
 
         DialogResult = true;
         Close();

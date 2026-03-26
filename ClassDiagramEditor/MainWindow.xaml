@@ -305,10 +305,12 @@
                                 <!-- 属性 -->
                                 <TextBlock Text="属性" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
-                                    <ListBox ItemsSource="{Binding Attributes}" 
+                                    <ListBox x:Name="AttributeListBox"
+                                             ItemsSource="{Binding Attributes}" 
                                              Height="150"
                                              BorderThickness="0"
-                                             Background="White">
+                                             Background="White"
+                                             MouseDoubleClick="AttributeListBox_MouseDoubleClick">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding DisplayText}" 
@@ -317,6 +319,13 @@
                                                            Padding="3"/>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
+                                        <!-- [2026-03-26 追加] 属性の右クリックメニュー（編集・削除） -->
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="✏️ 編集" Click="EditAttribute_Click"/>
+                                                <MenuItem Header="🗑️ 削除" Click="DeleteAttribute_Click"/>
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
                                     </ListBox>
                                 </Border>
                                 <Button Content="➕ 属性を追加" 
@@ -332,10 +341,12 @@
                                 <!-- メソッド -->
                                 <TextBlock Text="メソッド" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
                                 <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="3">
-                                    <ListBox ItemsSource="{Binding Methods}" 
+                                    <ListBox x:Name="MethodListBox"
+                                             ItemsSource="{Binding Methods}" 
                                              Height="150"
                                              BorderThickness="0"
-                                             Background="White">
+                                             Background="White"
+                                             MouseDoubleClick="MethodListBox_MouseDoubleClick">
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding DisplayText}" 
@@ -344,6 +355,13 @@
                                                            Padding="3"/>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
+                                        <!-- [2026-03-26 追加] メソッドの右クリックメニュー（編集・削除） -->
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="✏️ 編集" Click="EditMethod_Click"/>
+                                                <MenuItem Header="🗑️ 削除" Click="DeleteMethod_Click"/>
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
                                     </ListBox>
                                 </Border>
                                 <Button Content="➕ メソッドを追加" 
