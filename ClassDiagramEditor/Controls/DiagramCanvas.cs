@@ -947,6 +947,17 @@ public class DiagramCanvas : Canvas
         InvalidateVisual();
     }
 
+    // [2026-03-26 追加] 各クラスの描画済みサイズを外部に公開する
+    // ClassBoxVisual.Draw() 呼び出し後に Width/Height が確定するため、
+    // OnRender 後（画面描画後）に呼び出すこと
+    public Dictionary<Guid, (double Width, double Height)> GetClassSizes()
+    {
+        return _classVisuals.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (kvp.Value.Width, kvp.Value.Height)
+        );
+    }
+
     // [2026-03-25 追加] 親要素をたどってScrollViewerを取得するヘルパー
     private static System.Windows.Controls.ScrollViewer? FindParentScrollViewer(DependencyObject child)
     {
@@ -1008,22 +1019,24 @@ public class DiagramCanvas : Canvas
 /// <summary>
 /// クラスボックスの描画
 /// </summary>
+// ClassBoxVisual クラス全体を置き換え
+/// <summary>
+/// クラスボックスの描画
+/// </summary>
 public class ClassBoxVisual
 {
     private const double Padding = 10;
     private const double LineHeight = 20;
     private const double MinWidth = 150;
     private const double HeaderHeight = 35;
-    // [2026-03-26 追加] ステレオタイプ表示時の追加ヘッダー高さ
     private const double StereotypeExtraHeight = 14;
 
     public double Width { get; private set; } = MinWidth;
     public double Height { get; private set; } = HeaderHeight;
 
+    // [2026-03-26 修正] FormattedTextで各テキストの実幅を測定してボックス幅を自動調整
     private void CalculateSize(ClassModel model)
     {
-        Width = MinWidth;
-        // [2026-03-26 修正] ステレオタイプがある場合はヘッダー高さを増やす
         double headerHeight = GetHeaderHeight(model);
         Height = headerHeight;
 
@@ -1038,9 +1051,60 @@ public class ClassBoxVisual
         }
 
         Height += Padding;
+
+        // [2026-03-26 修正] テキスト幅を実測してボックス幅を決定
+        double requiredWidth = MinWidth;
+
+        // ステレオタイプ幅
+        if (!string.IsNullOrEmpty(model.TypeDisplayText))
+        {
+            requiredWidth = Math.Max(requiredWidth,
+                MeasureTextWidth(model.TypeDisplayText, 10, FontStyles.Italic, FontWeights.Normal)
+                + Padding * 2);
+        }
+
+        // クラス名幅
+        var nameFontStyle = model.Type == ClassType.AbstractClass
+            ? FontStyles.Italic : FontStyles.Normal;
+        requiredWidth = Math.Max(requiredWidth,
+            MeasureTextWidth(model.Name, 14, nameFontStyle, FontWeights.Bold)
+            + Padding * 2);
+
+        // 属性幅
+        foreach (var attr in model.Attributes)
+        {
+            requiredWidth = Math.Max(requiredWidth,
+                MeasureTextWidth(attr.DisplayText, 11, FontStyles.Normal, FontWeights.Normal)
+                + Padding * 2);
+        }
+
+        // メソッド幅
+        foreach (var method in model.Methods)
+        {
+            requiredWidth = Math.Max(requiredWidth,
+                MeasureTextWidth(method.DisplayText, 11, FontStyles.Normal, FontWeights.Normal)
+                + Padding * 2);
+        }
+
+        Width = requiredWidth;
     }
 
-    // [2026-03-26 追加] ステレオタイプの有無に応じたヘッダー高さを返す
+    // [2026-03-26 追加] FormattedTextを使用してテキストの実幅を測定する
+    private static double MeasureTextWidth(string text, double fontSize,
+        FontStyle fontStyle, FontWeight fontWeight)
+    {
+        var formattedText = new FormattedText(
+            text,
+            System.Globalization.CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI"), fontStyle, fontWeight, FontStretches.Normal),
+            fontSize,
+            Brushes.Black,
+            1.0
+        );
+        return formattedText.Width;
+    }
+
     private static double GetHeaderHeight(ClassModel model)
     {
         return string.IsNullOrEmpty(model.TypeDisplayText)
@@ -1055,7 +1119,6 @@ public class ClassBoxVisual
         var position = model.Position;
         var rect = new Rect(position, new Size(Width, Height));
 
-        // 背景色の決定（クラスタイプに応じて）
         var backgroundBrush = model.Type switch
         {
             ClassType.Interface => new SolidColorBrush(Color.FromRgb(230, 240, 255)),
@@ -1065,7 +1128,6 @@ public class ClassBoxVisual
 
         if (isSelected)
         {
-            // 外側の光る枠を描画（グロー効果）
             var glowRect = new Rect(
                 position.X - 4,
                 position.Y - 4,
@@ -1086,12 +1148,9 @@ public class ClassBoxVisual
             };
 
             dc.DrawRectangle(null, new Pen(glowBrush, 6), glowRect);
-
-            // メインの選択枠
             dc.DrawRectangle(null, new Pen(Brushes.DodgerBlue, 3), rect);
         }
 
-        // メインのボックスを描画
         var borderPen = isSelected
             ? new Pen(Brushes.DodgerBlue, 2)
             : new Pen(Brushes.Black, 2);
@@ -1099,12 +1158,10 @@ public class ClassBoxVisual
         dc.DrawRectangle(backgroundBrush, borderPen, rect);
 
         double currentY = position.Y;
-
-        // [2026-03-26 修正] ステレオタイプの有無に応じたヘッダー高さを使用
         double headerHeight = GetHeaderHeight(model);
         var headerRect = new Rect(position.X, currentY, Width, headerHeight);
         var headerBrush = isSelected
-            ? new SolidColorBrush(Color.FromRgb(33, 150, 243)) // 選択時は青色
+            ? new SolidColorBrush(Color.FromRgb(33, 150, 243))
             : new SolidColorBrush(Color.FromRgb(200, 200, 200));
 
         dc.DrawRectangle(headerBrush, null, headerRect);
@@ -1115,7 +1172,6 @@ public class ClassBoxVisual
         {
             DrawText(dc, model.TypeDisplayText, position.X + Padding, currentY + 4, 10,
                 FontStyles.Italic, FontWeights.Normal, headerTextColor);
-            // [2026-03-26 修正] ステレオタイプ分だけ下にずらす
             currentY += StereotypeExtraHeight;
         }
 
@@ -1123,14 +1179,12 @@ public class ClassBoxVisual
             model.Type == ClassType.AbstractClass ? FontStyles.Italic : FontStyles.Normal,
             FontWeights.Bold, headerTextColor);
 
-        // [2026-03-26 修正] ヘッダー高さを動的に計算した値で区切り線を描画
         currentY = position.Y + headerHeight;
 
         dc.DrawLine(new Pen(Brushes.Black, 1),
             new Point(position.X, currentY),
             new Point(position.X + Width, currentY));
 
-        // 属性
         if (model.Attributes.Count > 0)
         {
             currentY += Padding / 2;
@@ -1146,7 +1200,6 @@ public class ClassBoxVisual
                 new Point(position.X + Width, currentY));
         }
 
-        // メソッド
         if (model.Methods.Count > 0)
         {
             currentY += Padding / 2;
@@ -1157,39 +1210,25 @@ public class ClassBoxVisual
             }
         }
 
-        // 選択時のコーナーマーカーを追加
         if (isSelected)
         {
             DrawSelectionCorners(dc, position, Width, Height);
         }
     }
 
-    /// <summary>
-    /// 選択コーナーを描画
-    /// </summary>
-    /// <param name="dc"></param>
-    /// <param name="position"></param>
-    /// <param name="width"></param>
-    /// <param name="height"></param>
-    private static void DrawSelectionCorners(DrawingContext dc, Point position, double width, double height)
+    private static void DrawSelectionCorners(DrawingContext dc, Point position,
+        double width, double height)
     {
         const double cornerSize = 8;
         var cornerBrush = Brushes.DodgerBlue;
         var cornerPen = new Pen(Brushes.White, 1);
 
-        // 左上
         dc.DrawEllipse(cornerBrush, cornerPen,
             new Point(position.X, position.Y), cornerSize / 2, cornerSize / 2);
-
-        // 右上
         dc.DrawEllipse(cornerBrush, cornerPen,
             new Point(position.X + width, position.Y), cornerSize / 2, cornerSize / 2);
-
-        // 左下
         dc.DrawEllipse(cornerBrush, cornerPen,
             new Point(position.X, position.Y + height), cornerSize / 2, cornerSize / 2);
-
-        // 右下
         dc.DrawEllipse(cornerBrush, cornerPen,
             new Point(position.X + width, position.Y + height), cornerSize / 2, cornerSize / 2);
     }

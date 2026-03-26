@@ -330,14 +330,15 @@ public class ExportService
         }
     }
 
-    // [2026-03-24 修正] バウンディングボックス範囲のみをSVGエクスポート（完全実装）
-    public void ExportToSvg(UIElement element, string filePath, Rect bounds, double padding,
+    // [2026-03-26 修正] sizeMapを引数で受け取り独自のテキスト幅推定計算を廃止
+    public void ExportToSvg(string filePath, Rect bounds, double padding,
                             IEnumerable<ClassModel> classes,
-                            IEnumerable<RelationModel> relations)
+                            IEnumerable<RelationModel> relations,
+                            Dictionary<Guid, (double Width, double Height)> classSizes)
     {
         try
         {
-            var svg = GenerateSvg(bounds, padding, classes, relations);
+            var svg = GenerateSvg(bounds, padding, classes, relations, classSizes);
             File.WriteAllText(filePath, svg);
         }
         catch (Exception ex)
@@ -415,25 +416,57 @@ public class ExportService
         return (width, height, translateX, translateY);
     }
 
-    // [2026-03-26 追加] DiagramModelからSVGを完全生成する
-    // [2026-03-25 修正] <defs>ブロックを先頭に移動。参照より後の定義はInkscapeなど一部レンダラーで無効になるため
     private static string GenerateSvg(
         Rect bounds, double padding,
         IEnumerable<ClassModel> classes,
-        IEnumerable<RelationModel> relations)
+        IEnumerable<RelationModel> relations,
+        Dictionary<Guid, (double Width, double Height)> classSizes)
     {
-        double ox = bounds.X - padding; // 原点オフセット X
-        double oy = bounds.Y - padding; // 原点オフセット Y
+        // [2026-03-26 修正] IEnumerableの多重列挙によるデータ消失を防ぐため
+        // 先頭でリスト化して以降の全ループで再利用する
+        var classesList = classes.ToList();
+        var relationsList = relations.ToList();
+
+        var sizeMap = classSizes;
+
+        const double classHeaderH = 35;
+        const double stereotypeExtraH = 14;
+        const double classLineH = 20;
+        const double classPad = 10;
+        const double fontSize = 11;
+
+        // [2026-03-26 修正] classesList使用・sizeMapのTryGetValue失敗時はスキップ
+        double svgMinX = double.MaxValue, svgMinY = double.MaxValue;
+        double svgMaxX = double.MinValue, svgMaxY = double.MinValue;
+        foreach (var cls in classesList)
+        {
+            if (!sizeMap.TryGetValue(cls.Id, out var sz)) continue;
+            svgMinX = Math.Min(svgMinX, cls.Position.X);
+            svgMinY = Math.Min(svgMinY, cls.Position.Y);
+            svgMaxX = Math.Max(svgMaxX, cls.Position.X + sz.Width);
+            svgMaxY = Math.Max(svgMaxY, cls.Position.Y + sz.Height);
+        }
+
+        double ox, oy, svgW, svgH;
+        if (svgMaxX > svgMinX)
+        {
+            ox = svgMinX - padding;
+            oy = svgMinY - padding;
+            svgW = (svgMaxX - svgMinX) + padding * 2;
+            svgH = (svgMaxY - svgMinY) + padding * 2;
+        }
+        else
+        {
+            ox = bounds.X - padding;
+            oy = bounds.Y - padding;
+            svgW = bounds.Width + padding * 2;
+            svgH = bounds.Height + padding * 2;
+        }
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"""<?xml version="1.0" encoding="UTF-8"?>""");
-
-        // [2026-03-26 修正] SVGサイズはsizeMap確定後に計算するためプレースホルダーを使用
-        // 後でReplace()で差し替える
-        const string svgSizePlaceholder = "SVG_SIZE_PLACEHOLDER";
-        sb.AppendLine($"""<svg {svgSizePlaceholder} xmlns="http://www.w3.org/2000/svg">""");
+        sb.AppendLine($"""<svg width="{svgW:F0}" height="{svgH:F0}" xmlns="http://www.w3.org/2000/svg">""");
         sb.AppendLine("""  <rect width="100%" height="100%" fill="white"/>""");
-        // [2026-03-25 修正] <defs>を参照より前に配置。SVG仕様上マーカー定義は使用箇所より先に記述が必要
         sb.AppendLine("""
   <defs>
     <marker id="arrowTriangleOpen" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
@@ -451,116 +484,20 @@ public class ExportService
   </defs>
 """);
 
-        // クラスボックスのサイズ計算用定数
-        const double classMinWidth = 150;
-        const double classHeaderH = 35;
-        // [2026-03-26 追加] ステレオタイプ表示時の追加ヘッダー高さ（ClassBoxVisualと合わせる）
-        const double stereotypeExtraH = 14;
-        const double classLineH = 20;
-        const double classPad = 10;
-        const double fontSize = 11;
-        // [2026-03-26 追加] テキスト幅の推定係数（フォントサイズに対する平均文字幅の比率）
-        const double headerCharWidth = 8.5;     // クラス名（太字14px）の平均文字幅
-        const double memberCharWidth = 6.5;     // 属性・メソッド（11px）の平均文字幅
-        const double stereotypeCharWidth = 6.0; // ステレオタイプ（10px）の平均文字幅
-
-        // [2026-03-26 追加] テキストから必要な幅を推定するローカル関数
-        static double EstimateTextWidth(string text, double charWidth)
-            => text.Length * charWidth + 20; // 左右パディング込み
-
-        // クラスごとの描画サイズを事前計算
-        var sizeMap = new Dictionary<Guid, (double w, double h)>();
-        foreach (var cls in classes)
-        {
-            // [2026-03-26 修正] ステレオタイプがある場合はヘッダー高さを増やす
-            bool hasStereotype = !string.IsNullOrEmpty(cls.TypeDisplayText);
-            double headerH = classHeaderH + (hasStereotype ? stereotypeExtraH : 0);
-
-            double h = headerH;
-            if (cls.Attributes.Count > 0) h += classPad + cls.Attributes.Count * classLineH;
-            if (cls.Methods.Count > 0) h += classPad + cls.Methods.Count * classLineH;
-            h += classPad;
-
-            // [2026-03-26 追加] 各テキストの必要幅を計算してボックス幅を決定
-            double requiredWidth = classMinWidth;
-
-            // クラス名の幅
-            requiredWidth = Math.Max(requiredWidth,
-                EstimateTextWidth(cls.Name, headerCharWidth));
-
-            // ステレオタイプの幅
-            if (hasStereotype)
-            {
-                requiredWidth = Math.Max(requiredWidth,
-                    EstimateTextWidth(cls.TypeDisplayText, stereotypeCharWidth));
-            }
-
-            // 属性の幅
-            foreach (var attr in cls.Attributes)
-            {
-                requiredWidth = Math.Max(requiredWidth,
-                    EstimateTextWidth(attr.DisplayText, memberCharWidth));
-            }
-
-            // メソッドの幅
-            foreach (var method in cls.Methods)
-            {
-                requiredWidth = Math.Max(requiredWidth,
-                    EstimateTextWidth(method.DisplayText, memberCharWidth));
-            }
-
-            sizeMap[cls.Id] = (requiredWidth, h);
-        }
-
-        // [2026-03-26 追加] sizeMap確定後にSVG全体サイズを再計算する
-        // GetDiagramBoundsはWPF側で固定幅150を使っているため、SVG側は動的幅で再計算が必要
-        double svgMinX = double.MaxValue, svgMinY = double.MaxValue;
-        double svgMaxX = double.MinValue, svgMaxY = double.MinValue;
-        foreach (var cls in classes)
-        {
-            if (!sizeMap.TryGetValue(cls.Id, out var sz)) continue;
-            svgMinX = Math.Min(svgMinX, cls.Position.X);
-            svgMinY = Math.Min(svgMinY, cls.Position.Y);
-            svgMaxX = Math.Max(svgMaxX, cls.Position.X + sz.w);
-            svgMaxY = Math.Max(svgMaxY, cls.Position.Y + sz.h);
-        }
-
-        // クラスが1つもない場合はboundsをそのまま使用
-        double svgW, svgH;
-        if (svgMaxX > svgMinX)
-        {
-            // [2026-03-26 修正] 動的幅で計算したboundsにpaddingを加えてSVGサイズを確定
-            ox = svgMinX - padding;
-            oy = svgMinY - padding;
-            svgW = (svgMaxX - svgMinX) + padding * 2;
-            svgH = (svgMaxY - svgMinY) + padding * 2;
-        }
-        else
-        {
-            svgW = bounds.Width + padding * 2;
-            svgH = bounds.Height + padding * 2;
-        }
-
-        // プレースホルダーをSVGの実際のサイズで置換
-        sb.Replace(svgSizePlaceholder, $"width=\"{svgW:F0}\" height=\"{svgH:F0}\"");
-
         // ── 関係線 ──────────────────────────────
-        foreach (var rel in relations)
+        foreach (var rel in relationsList)
         {
-            var src = classes.FirstOrDefault(c => c.Id == rel.SourceClassId);
-            var tgt = classes.FirstOrDefault(c => c.Id == rel.TargetClassId);
+            var src = classesList.FirstOrDefault(c => c.Id == rel.SourceClassId);
+            var tgt = classesList.FirstOrDefault(c => c.Id == rel.TargetClassId);
             if (src == null || tgt == null) continue;
             if (!sizeMap.TryGetValue(src.Id, out var ss) || !sizeMap.TryGetValue(tgt.Id, out var ts)) continue;
 
-            // 中心点
-            var sc = new Point(src.Position.X + ss.w / 2, src.Position.Y + ss.h / 2);
-            var tc = new Point(tgt.Position.X + ts.w / 2, tgt.Position.Y + ts.h / 2);
+            var sc = new Point(src.Position.X + ss.Width / 2, src.Position.Y + ss.Height / 2);
+            var tc = new Point(tgt.Position.X + ts.Width / 2, tgt.Position.Y + ts.Height / 2);
 
-            // 接続点
-            var sp = SvgConnectionPoint(src.Position, ss.w, ss.h, sc, tc);
-            var tp = SvgConnectionPoint(tgt.Position, ts.w, ts.h, tc, sc);
+            var sp = SvgConnectionPoint(src.Position, ss.Width, ss.Height, sc, tc);
+            var tp = SvgConnectionPoint(tgt.Position, ts.Width, ts.Height, tc, sc);
 
-            // 座標をオフセット補正
             double x1 = sp.X - ox, y1 = sp.Y - oy;
             double x2 = tp.X - ox, y2 = tp.Y - oy;
 
@@ -568,7 +505,6 @@ public class ExportService
             string strokeDash = isDashed ? """ stroke-dasharray="6,4" """ : " ";
             string stroke = "black";
 
-            // [2026-03-24 追加] 関係種別ごとにSVGマーカー付き線を生成
             switch (rel.Type)
             {
                 case RelationType.Inheritance:
@@ -591,16 +527,15 @@ public class ExportService
         }
 
         // ── クラスボックス ───────────────────────
-        foreach (var cls in classes)
+        foreach (var cls in classesList)
         {
             if (!sizeMap.TryGetValue(cls.Id, out var sz)) continue;
 
             double bx = cls.Position.X - ox;
             double by = cls.Position.Y - oy;
-            double bw = sz.w;
-            double bh = sz.h;
+            double bw = sz.Width;
+            double bh = sz.Height;
 
-            // 背景色
             string bgColor = cls.Type switch
             {
                 ClassType.Interface => "#E6F0FF",
@@ -608,16 +543,12 @@ public class ExportService
                 _ => "#FFFFFF"
             };
 
-            // ボックス本体
             sb.AppendLine($"""  <rect x="{bx:F1}" y="{by:F1}" width="{bw:F1}" height="{bh:F1}" fill="{bgColor}" stroke="black" stroke-width="2"/>""");
 
-            // ヘッダー背景
-            // [2026-03-26 修正] ステレオタイプの有無に応じたヘッダー高さを使用
             bool clsHasStereotype = !string.IsNullOrEmpty(cls.TypeDisplayText);
             double clsHeaderH = classHeaderH + (clsHasStereotype ? stereotypeExtraH : 0);
             sb.AppendLine($"""  <rect x="{bx:F1}" y="{by:F1}" width="{bw:F1}" height="{clsHeaderH:F1}" fill="#C8C8C8"/>""");
 
-            // ステレオタイプ
             double textY = by + 3;
             if (!string.IsNullOrEmpty(cls.TypeDisplayText))
             {
@@ -625,17 +556,12 @@ public class ExportService
                 textY += stereotypeExtraH;
             }
 
-            // クラス名
             string nameStyle = cls.Type == ClassType.AbstractClass ? " font-style=\"italic\"" : "";
             sb.AppendLine($"""  <text x="{bx + classPad:F1}" y="{textY + 18:F1}" font-family="Segoe UI" font-size="14" font-weight="bold"{nameStyle}>{SvgEscape(cls.Name)}</text>""");
 
-            // [2026-03-26 修正] 動的なヘッダー高さで区切り線を描画
             double curY = by + clsHeaderH;
-
-            // 区切り線（属性の上）
             sb.AppendLine($"""  <line x1="{bx:F1}" y1="{curY:F1}" x2="{bx + bw:F1}" y2="{curY:F1}" stroke="black" stroke-width="1"/>""");
 
-            // 属性
             if (cls.Attributes.Count > 0)
             {
                 curY += classPad / 2;
@@ -648,7 +574,6 @@ public class ExportService
                 sb.AppendLine($"""  <line x1="{bx:F1}" y1="{curY:F1}" x2="{bx + bw:F1}" y2="{curY:F1}" stroke="black" stroke-width="1"/>""");
             }
 
-            // メソッド
             if (cls.Methods.Count > 0)
             {
                 curY += classPad / 2;

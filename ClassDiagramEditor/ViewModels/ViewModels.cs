@@ -445,13 +445,14 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // [2026-03-24 追加] バウンディングボックスを受け取ってSVG出力
-    public void ExportToSvg(string filePath, Rect bounds, double padding)
+    // [2026-03-26 修正] classSizesを引数で受け取る形式に変更
+    public void ExportToSvg(string filePath, Rect bounds, double padding,
+        Dictionary<Guid, (double Width, double Height)> classSizes)
     {
         try
         {
-            _exportService.ExportToSvg(null!, filePath, bounds, padding,
-                _diagram.Classes, _diagram.Relations);
+            _exportService.ExportToSvg(filePath, bounds, padding,
+                _diagram.Classes, _diagram.Relations, classSizes);
             StatusMessage = $"Exported: {Path.GetFileName(filePath)}";
         }
         catch (Exception ex)
@@ -478,37 +479,28 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // [2026-03-24 追加] 現在の図のバウンディングボックスを計算して返す
-    // クラスが1つもない場合は Empty を返す
-    public Rect GetDiagramBounds()
+    // [2026-03-26 修正] サイズマップを引数で受け取り固定幅計算を廃止
+    // classVisuals が未確定の場合は呼び出し元で空の辞書を渡してはいけない
+    public Rect GetDiagramBounds(Dictionary<Guid, (double Width, double Height)> classSizes)
     {
         if (_diagram.Classes.Count == 0) return Rect.Empty;
-
-        // 暫定サイズ（ClassBoxVisualの計算と合わせる）
-        const double classMinWidth = 150;
-        const double classHeaderH = 35;
-        // [2026-03-26 追加] ステレオタイプ表示時の追加ヘッダー高さ（ClassBoxVisualと合わせる）
-        const double stereotypeExtraH = 14;
-        const double classLineH = 20;
-        const double classPad = 10;
 
         double minX = double.MaxValue, minY = double.MaxValue;
         double maxX = double.MinValue, maxY = double.MinValue;
 
         foreach (var cls in _diagram.Classes)
         {
-            // [2026-03-26 修正] ステレオタイプがある場合はヘッダー高さを増やす
-            bool hasStereotype = cls.Type != Models.ClassType.Class;
-            double headerH = classHeaderH + (hasStereotype ? stereotypeExtraH : 0);
-
-            double h = headerH;
-            if (cls.Attributes.Count > 0) h += classPad + cls.Attributes.Count * classLineH;
-            if (cls.Methods.Count > 0) h += classPad + cls.Methods.Count * classLineH;
-            h += classPad;
+            // [2026-03-26 修正] 実描画サイズを使用。未登録の場合はフォールバック値を使用
+            double w = 150, h = 55;
+            if (classSizes.TryGetValue(cls.Id, out var size))
+            {
+                w = size.Width;
+                h = size.Height;
+            }
 
             minX = Math.Min(minX, cls.Position.X);
             minY = Math.Min(minY, cls.Position.Y);
-            maxX = Math.Max(maxX, cls.Position.X + classMinWidth);
+            maxX = Math.Max(maxX, cls.Position.X + w);
             maxY = Math.Max(maxY, cls.Position.Y + h);
         }
 

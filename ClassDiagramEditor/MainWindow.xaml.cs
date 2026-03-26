@@ -68,7 +68,10 @@ public partial class MainWindow : Window
     {
         if (_viewModel == null) return;
 
-        var bounds = _viewModel.GetDiagramBounds();
+        // [2026-03-26 修正] 実描画サイズを取得してBounds計算・SVGエクスポートに使用
+        var classSizes = DiagramCanvas.GetClassSizes();
+        var bounds = _viewModel.GetDiagramBounds(classSizes);
+
         if (bounds.IsEmpty)
         {
             MessageBox.Show("エクスポートするクラスがありません。", "エクスポート",
@@ -109,7 +112,8 @@ public partial class MainWindow : Window
                         FileName = _viewModel.Diagram.Name
                     };
                     if (saveDialog.ShowDialog() == true)
-                        _viewModel.ExportToSvg(saveDialog.FileName, bounds, pad);
+                        // [2026-03-26 修正] classSizesを渡す
+                        _viewModel.ExportToSvg(saveDialog.FileName, bounds, pad, classSizes);
                     break;
                 }
             case Dialogs.ExportFormat.Clipboard:
