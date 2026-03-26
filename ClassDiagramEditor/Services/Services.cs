@@ -416,6 +416,7 @@ public class ExportService
     }
 
     // [2026-03-24 追加] DiagramModelからSVGを完全生成する
+    // [2026-03-25 修正] <defs>ブロックを先頭に移動。参照より後の定義はInkscapeなど一部レンダラーで無効になるため
     private static string GenerateSvg(
         Rect bounds, double padding,
         IEnumerable<ClassModel> classes,
@@ -430,6 +431,23 @@ public class ExportService
         sb.AppendLine($"""<?xml version="1.0" encoding="UTF-8"?>""");
         sb.AppendLine($"""<svg width="{svgW:F0}" height="{svgH:F0}" xmlns="http://www.w3.org/2000/svg">""");
         sb.AppendLine("""  <rect width="100%" height="100%" fill="white"/>""");
+        // [2026-03-25 修正] <defs>を参照より前に配置。SVG仕様上マーカー定義は使用箇所より先に記述が必要
+        sb.AppendLine("""
+  <defs>
+    <marker id="arrowTriangleOpen" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
+      <polygon points="0,0 10,5 0,10" fill="white" stroke="black" stroke-width="1.5"/>
+    </marker>
+    <marker id="arrowOpen" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
+      <polyline points="0,0 10,5 0,10" fill="none" stroke="black" stroke-width="1.5"/>
+    </marker>
+    <marker id="diamondOpen" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto">
+      <polygon points="0,5 7,0 14,5 7,10" fill="white" stroke="black" stroke-width="1.5"/>
+    </marker>
+    <marker id="diamondFilled" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto">
+      <polygon points="0,5 7,0 14,5 7,10" fill="black" stroke="black" stroke-width="1.5"/>
+    </marker>
+  </defs>
+""");
 
         // クラスボックスのサイズ計算用定数
         const double classMinWidth = 150;
@@ -560,25 +578,6 @@ public class ExportService
                 }
             }
         }
-
-        // ── SVGマーカー定義 ────────────────────
-        // [2026-03-24 追加] 継承・実装・依存・集約・合成の矢印マーカーをdefs内に定義
-        sb.AppendLine("""
-  <defs>
-    <marker id="arrowTriangleOpen" markerWidth="12" markerHeight="10" refX="10" refY="5" orient="auto">
-      <polygon points="0,0 10,5 0,10" fill="white" stroke="black" stroke-width="1.5"/>
-    </marker>
-    <marker id="arrowOpen" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
-      <polyline points="0,0 10,5 0,10" fill="none" stroke="black" stroke-width="1.5"/>
-    </marker>
-    <marker id="diamondOpen" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto">
-      <polygon points="0,5 7,0 14,5 7,10" fill="white" stroke="black" stroke-width="1.5"/>
-    </marker>
-    <marker id="diamondFilled" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto">
-      <polygon points="0,5 7,0 14,5 7,10" fill="black" stroke="black" stroke-width="1.5"/>
-    </marker>
-  </defs>
-""");
 
         sb.AppendLine("</svg>");
         return sb.ToString();
