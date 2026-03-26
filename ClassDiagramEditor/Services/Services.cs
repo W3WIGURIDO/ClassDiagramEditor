@@ -415,7 +415,7 @@ public class ExportService
         return (width, height, translateX, translateY);
     }
 
-    // [2026-03-24 追加] DiagramModelからSVGを完全生成する
+    // [2026-03-26 追加] DiagramModelからSVGを完全生成する
     // [2026-03-25 修正] <defs>ブロックを先頭に移動。参照より後の定義はInkscapeなど一部レンダラーで無効になるため
     private static string GenerateSvg(
         Rect bounds, double padding,
@@ -424,12 +424,14 @@ public class ExportService
     {
         double ox = bounds.X - padding; // 原点オフセット X
         double oy = bounds.Y - padding; // 原点オフセット Y
-        double svgW = bounds.Width + padding * 2;
-        double svgH = bounds.Height + padding * 2;
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"""<?xml version="1.0" encoding="UTF-8"?>""");
-        sb.AppendLine($"""<svg width="{svgW:F0}" height="{svgH:F0}" xmlns="http://www.w3.org/2000/svg">""");
+
+        // [2026-03-26 修正] SVGサイズはsizeMap確定後に計算するためプレースホルダーを使用
+        // 後でReplace()で差し替える
+        const string svgSizePlaceholder = "SVG_SIZE_PLACEHOLDER";
+        sb.AppendLine($"""<svg {svgSizePlaceholder} xmlns="http://www.w3.org/2000/svg">""");
         sb.AppendLine("""  <rect width="100%" height="100%" fill="white"/>""");
         // [2026-03-25 修正] <defs>を参照より前に配置。SVG仕様上マーカー定義は使用箇所より先に記述が必要
         sb.AppendLine("""
@@ -457,6 +459,14 @@ public class ExportService
         const double classLineH = 20;
         const double classPad = 10;
         const double fontSize = 11;
+        // [2026-03-26 追加] テキスト幅の推定係数（フォントサイズに対する平均文字幅の比率）
+        const double headerCharWidth = 8.5;     // クラス名（太字14px）の平均文字幅
+        const double memberCharWidth = 6.5;     // 属性・メソッド（11px）の平均文字幅
+        const double stereotypeCharWidth = 6.0; // ステレオタイプ（10px）の平均文字幅
+
+        // [2026-03-26 追加] テキストから必要な幅を推定するローカル関数
+        static double EstimateTextWidth(string text, double charWidth)
+            => text.Length * charWidth + 20; // 左右パディング込み
 
         // クラスごとの描画サイズを事前計算
         var sizeMap = new Dictionary<Guid, (double w, double h)>();
@@ -470,8 +480,69 @@ public class ExportService
             if (cls.Attributes.Count > 0) h += classPad + cls.Attributes.Count * classLineH;
             if (cls.Methods.Count > 0) h += classPad + cls.Methods.Count * classLineH;
             h += classPad;
-            sizeMap[cls.Id] = (classMinWidth, h);
+
+            // [2026-03-26 追加] 各テキストの必要幅を計算してボックス幅を決定
+            double requiredWidth = classMinWidth;
+
+            // クラス名の幅
+            requiredWidth = Math.Max(requiredWidth,
+                EstimateTextWidth(cls.Name, headerCharWidth));
+
+            // ステレオタイプの幅
+            if (hasStereotype)
+            {
+                requiredWidth = Math.Max(requiredWidth,
+                    EstimateTextWidth(cls.TypeDisplayText, stereotypeCharWidth));
+            }
+
+            // 属性の幅
+            foreach (var attr in cls.Attributes)
+            {
+                requiredWidth = Math.Max(requiredWidth,
+                    EstimateTextWidth(attr.DisplayText, memberCharWidth));
+            }
+
+            // メソッドの幅
+            foreach (var method in cls.Methods)
+            {
+                requiredWidth = Math.Max(requiredWidth,
+                    EstimateTextWidth(method.DisplayText, memberCharWidth));
+            }
+
+            sizeMap[cls.Id] = (requiredWidth, h);
         }
+
+        // [2026-03-26 追加] sizeMap確定後にSVG全体サイズを再計算する
+        // GetDiagramBoundsはWPF側で固定幅150を使っているため、SVG側は動的幅で再計算が必要
+        double svgMinX = double.MaxValue, svgMinY = double.MaxValue;
+        double svgMaxX = double.MinValue, svgMaxY = double.MinValue;
+        foreach (var cls in classes)
+        {
+            if (!sizeMap.TryGetValue(cls.Id, out var sz)) continue;
+            svgMinX = Math.Min(svgMinX, cls.Position.X);
+            svgMinY = Math.Min(svgMinY, cls.Position.Y);
+            svgMaxX = Math.Max(svgMaxX, cls.Position.X + sz.w);
+            svgMaxY = Math.Max(svgMaxY, cls.Position.Y + sz.h);
+        }
+
+        // クラスが1つもない場合はboundsをそのまま使用
+        double svgW, svgH;
+        if (svgMaxX > svgMinX)
+        {
+            // [2026-03-26 修正] 動的幅で計算したboundsにpaddingを加えてSVGサイズを確定
+            ox = svgMinX - padding;
+            oy = svgMinY - padding;
+            svgW = (svgMaxX - svgMinX) + padding * 2;
+            svgH = (svgMaxY - svgMinY) + padding * 2;
+        }
+        else
+        {
+            svgW = bounds.Width + padding * 2;
+            svgH = bounds.Height + padding * 2;
+        }
+
+        // プレースホルダーをSVGの実際のサイズで置換
+        sb.Replace(svgSizePlaceholder, $"width=\"{svgW:F0}\" height=\"{svgH:F0}\"");
 
         // ── 関係線 ──────────────────────────────
         foreach (var rel in relations)
