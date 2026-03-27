@@ -475,10 +475,12 @@ public class ExportService
     <marker id="arrowOpen" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto">
       <polyline points="0,0 10,5 0,10" fill="none" stroke="black" stroke-width="1.5"/>
     </marker>
-    <marker id="diamondOpen" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto">
+    <!-- [2026-03-27 修正] refX=14に変更。marker-end使用時にダイヤの右尖り(x=14)をx2点に合わせることで
+         ダイヤ全体がクラスボックスの外側(x1方向)に表示される。refX=0だとダイヤがボックス内に埋まる -->
+    <marker id="diamondOpen" markerWidth="14" markerHeight="10" refX="14" refY="5" orient="auto">
       <polygon points="0,5 7,0 14,5 7,10" fill="white" stroke="black" stroke-width="1.5"/>
     </marker>
-    <marker id="diamondFilled" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto">
+    <marker id="diamondFilled" markerWidth="14" markerHeight="10" refX="14" refY="5" orient="auto">
       <polygon points="0,5 7,0 14,5 7,10" fill="black" stroke="black" stroke-width="1.5"/>
     </marker>
   </defs>
@@ -518,10 +520,13 @@ public class ExportService
                     sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5"/>""");
                     break;
                 case RelationType.Aggregation:
-                    sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5" marker-start="url(#diamondOpen)"/>""");
+                    // [2026-03-27 修正] WPFのDrawArrowHeadはダイヤをTarget側(end)に描画しているため
+                    // SVGもmarker-end（x2側=Target側）にダイヤを置く。refX=0で左尖りがx2点に接する
+                    sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5" marker-end="url(#diamondOpen)"/>""");
                     break;
                 case RelationType.Composition:
-                    sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5" marker-start="url(#diamondFilled)"/>""");
+                    // [2026-03-27 修正] 同上。合成は黒塗りダイヤをTarget側に配置
+                    sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5" marker-end="url(#diamondFilled)"/>""");
                     break;
             }
         }
