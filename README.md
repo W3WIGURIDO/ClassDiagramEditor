@@ -1,4 +1,3 @@
-# まだ使用不可
 # Class Diagram Editor
 
 **WPF + C# + .NET 10.0** で構築されたUMLクラス図作成ソフトウェア
@@ -26,40 +25,53 @@
 
 #### クラス図作成
 - クラス、インターフェース、抽象クラスの追加
-- 属性（フィールド）の追加・表示
-- メソッドの追加・表示
+- 属性（フィールド）の追加・編集・削除
+- メソッドの追加・編集・削除（パラメータ編集を含む）
 - アクセス修飾子（public/private/protected/internal）
 
 #### 関係
 - 継承（Inheritance）- 実線 + 白抜き三角
 - 実装（Implementation）- 点線 + 白抜き三角
-- 関連（Association）- 実線矢印
+- 関連（Association）- 実線
 - 依存（Dependency）- 点線矢印
+- 集約（Aggregation）- 実線 + 白抜きダイヤ
+- 合成（Composition）- 実線 + 黒塗りダイヤ
+- 関係線のラベル編集（ダブルクリックでインライン編集、右クリックメニューから追加・編集・削除）
+- 関係線のホバーハイライト（赤色強調表示）
+- 関係線の右クリックメニューによる削除
 
 #### 編集機能
 - ドラッグ&ドロップによるクラス配置
+- 複数選択（Ctrl+クリック、矩形ドラッグ）・一括移動
+- 全選択（Ctrl+A）
 - Undo/Redo（無制限）
 - クラス・関係の削除
-- プロパティのリアルタイム編集
+- プロパティのリアルタイム編集（クラス名、種別）
+- 属性・メソッドのダブルクリック編集
+- 属性・メソッドの右クリックメニュー（編集・削除）
+- 名前を付けて保存（上書き保存と別名保存を区別）
 
 #### 表示
-- UML標準記法での描画
+- UML標準記法での描画（Consolasフォントで属性・メソッドを表示）
 - ズームイン/アウト（10%～300%）
-- グリッド表示
-- クラス種別による色分け
+- グリッド表示（エクスポート時は非表示）
+- クラス種別による色分け（クラス: 白、インターフェース: 水色、抽象クラス: 橙）
+- 選択クラスのハイライト（青枠＋コーナーマーカー）
+- 中ボタンドラッグによるキャンバスパン
+- ウィンドウタイトルへの現在ファイル名表示
 
 #### 入出力
-- プロジェクト保存/読み込み（JSON形式）
-- PNG画像エクスポート
-- SVG画像エクスポート（基本実装）
+- プロジェクト保存/読み込み（.cdf / JSON形式）
+- PNG画像エクスポート（グリッド非表示・白背景）
+- クリップボードへのPNGコピー
+- SVG画像エクスポート（関係線・ラベル・クラスボックス対応）
 
 ### 🔲 今後実装予定
 
-- 属性・メソッドの編集・削除
-- メソッドパラメータの追加
-- 関係のラベル編集
-- コンテキストメニュー
-- 複数選択・一括操作
+- マウスホイールズーム（Ctrl+スクロール）
+- キーボードショートカット（Ctrl+N / Ctrl+O / Ctrl+S）
+- クラスの複製機能（`ClassModel.Clone()` 実装済み、UI未接続）
+- 関係線のクリック選択・プロパティパネル表示
 - 自動レイアウト
 - C#コードからの自動生成（Roslyn）
 - テーマのカスタマイズ
@@ -70,26 +82,24 @@
 
 ### 必要要件
 
-- **IDE**: Visual Studio 2026 以降
+- **IDE**: Visual Studio 2022 以降
 - **.NET SDK**: .NET 10.0 SDK
 - **OS**: Windows 10 (1809以降) / Windows 11
 
 ### インストール手順
 
 #### 1. リポジトリをクローン
-
 ```bash
 git clone https://github.com/yourusername/ClassDiagramEditor.git
 cd ClassDiagramEditor
 ```
 
 #### 2. Visual Studioで開く
-
 ```bash
-start ClassDiagramEditor.sln
+start ClassDiagramEditor.slnx
 ```
 
-または、Visual Studio 2026を起動して`ClassDiagramEditor.sln`を開く
+または、Visual Studio を起動して `ClassDiagramEditor.slnx` を開く
 
 #### 3. ビルド＆実行
 
@@ -105,24 +115,7 @@ dotnet run
 
 ## 📦 配布用ビルド
 
-### PowerShellスクリプトを使用（推奨）
-
-```powershell
-# 基本ビルド
-.\build.ps1
-
-# リリースビルド
-.\build.ps1 -Release
-
-# クリーンビルド
-.\build.ps1 -Clean -Release
-
-# サイズ最適化版も作成
-.\build.ps1 -Release -Trimmed
-```
-
 ### 手動ビルド
-
 ```bash
 # Framework-dependent版（ランタイム必要）
 dotnet publish -c Release -o publish/framework-dependent
@@ -134,28 +127,9 @@ dotnet publish -c Release -r win-x64 --self-contained true ^
   -o publish/self-contained
 ```
 
-### 配布ファイル
-
-ビルド後、`publish`フォルダに以下が生成されます：
-
-```
-publish/
-├── ClassDiagramEditor-v1.0.0-FrameworkDependent.zip (3-5MB)
-│   └── ランタイムが必要、軽量
-└── ClassDiagramEditor-v1.0.0-Portable.zip (90-120MB) ⭐推奨
-    └── ランタイム不要、単一EXE
-```
-
 ---
 
 ## 🎨 使い方
-
-### 起動
-
-Self-contained版の場合:
-```
-ClassDiagramEditor.exe をダブルクリック
-```
 
 ### 基本操作
 
@@ -167,71 +141,83 @@ ClassDiagramEditor.exe をダブルクリック
 #### 属性・メソッドの追加
 1. クラスをクリックして選択
 2. 右パネルで「➕ 属性を追加」または「➕ メソッドを追加」
-3. ダイアログで情報を入力
+3. ダイアログで情報を入力（メソッドはパラメータも設定可）
+
+#### 属性・メソッドの編集・削除
+- **ダブルクリック**: 右パネルのリスト上でダブルクリックして編集ダイアログを開く
+- **右クリックメニュー**: リスト上で右クリックして「✏️ 編集」または「🗑️ 削除」を選択
 
 #### 関係の追加
-1. 左パネルの「⬆️ 継承」「🔸 実装」「↔️ 関連」「⤴️ 依存」をクリック
+1. 左パネルの「⬆️ 継承」「🔸 実装」「↔️ 関連」「⤴️ 依存」「◇ 集約」「◆ 合成」をクリック
 2. 関係元のクラスをクリック
 3. 関係先のクラスをクリック
 4. 関係線が自動描画されます
 
+#### 関係のラベル編集
+- **ダブルクリック**: 関係線上でダブルクリックするとインライン編集ボックスが表示される
+  - Enter で確定、Escape でキャンセル、フォーカスアウトで確定
+- **右クリックメニュー**: 関係線上で右クリックして「🏷️ ラベルを追加/編集」または「🏷️ ラベルを削除」
+
+#### 複数選択と一括移動
+- **Ctrl+クリック**: 個別に選択を追加/解除
+- **矩形ドラッグ**: 空白部分からドラッグして範囲内のクラスを一括選択
+- **Ctrl+A**: 全クラスを選択
+- 選択したクラスをまとめてドラッグ移動可能
+
+#### キャンバスの移動
+- **中ボタンドラッグ**: キャンバス全体をパン（スクロール）
+
 #### ファイル操作
 
-**保存:**
-```
-ツールバー → 「保存」 → ファイル名を指定 → 保存
-形式: .cdf (Class Diagram File - JSON)
-```
+| 操作 | 方法 |
+|------|------|
+| 新規作成 | ツールバー → 「新規作成」 |
+| 開く | ツールバー → 「開く」→ .cdfファイルを選択 |
+| 上書き保存 | ツールバー → 「保存」（ファイル未設定時はダイアログ表示） |
+| 名前を付けて保存 | ツールバー → 「名前を付けて保存」 |
+| エクスポート | ツールバー → 「エクスポート」→ 形式・余白を選択 |
 
-**開く:**
-```
-ツールバー → 「開く」 → .cdfファイルを選択
-```
-
-**エクスポート:**
-```
-ツールバー → 「エクスポート」
-PNG形式で画像出力
-```
+**エクスポート形式:**
+- PNG 画像（グリッド非表示・白背景）
+- SVG ベクター画像（関係線・ラベル・クラスボックス対応）
+- クリップボードにコピー（PNG形式）
 
 #### キーボードショートカット
 
 | 操作 | ショートカット |
-|-----|-------------|
-| 新規作成 | `Ctrl+N` (予定) |
-| 開く | `Ctrl+O` (予定) |
-| 保存 | `Ctrl+S` (予定) |
+|------|--------------|
 | Undo | `Ctrl+Z` |
 | Redo | `Ctrl+Y` |
-| 削除 | `Delete` (予定) |
+| 全選択 | `Ctrl+A` |
+| 選択解除 | `Escape` |
+| 削除 | `Delete` |
 
 ---
 
 ## 🏗️ アーキテクチャ
 
 ### プロジェクト構造
-
 ```
 ClassDiagramEditor/
 ├── Models/                  # データモデル
-│   ├── Enums.cs            # 列挙型
-│   └── Models.cs           # モデルクラス
+│   ├── Enums.cs            # 列挙型（AccessModifier, ClassType, RelationType）
+│   └── Models.cs           # モデルクラス（ClassModel, AttributeModel, MethodModel, RelationModel, DiagramModel）
 ├── Commands/                # Undo/Redoコマンド
-│   └── Commands.cs
+│   └── Commands.cs         # AddClass/RemoveClass/MoveClass/AddRelation/RemoveRelation/EditRelationLabel/MoveMultipleClasses
 ├── ViewModels/              # ViewModel層
-│   └── ViewModels.cs
+│   └── ViewModels.cs       # MainViewModel, RelayCommand, ViewModelBase
 ├── Controls/                # カスタムコントロール
-│   └── DiagramCanvas.cs
+│   └── DiagramCanvas.cs    # キャンバス描画・マウス操作・ClassBoxVisual
 ├── Dialogs/                 # ダイアログ
-│   ├── AddAttributeDialog.xaml
-│   ├── AddMethodDialog.xaml
-│   └── Dialogs.cs
+│   ├── AddAttributeDialog.xaml / .cs   # 属性追加・編集
+│   ├── AddMethodDialog.xaml / .cs      # メソッド追加・編集（パラメータ含む）
+│   └── ExportDialog.xaml / .cs         # エクスポート設定
 ├── Services/                # サービス層
-│   └── Services.cs
+│   └── Services.cs         # FileService（JSON保存読込）, ExportService（PNG/SVG/クリップボード）
 ├── MainWindow.xaml          # メインUI
 ├── MainWindow.xaml.cs
 ├── App.xaml
-└── App.xaml.cs
+└── App.xaml.cs             # NullToVisibilityConverter, NotNullToVisibilityConverter
 ```
 
 ### デザインパターン
@@ -249,29 +235,8 @@ ClassDiagramEditor/
 | 言語 | C# 13 |
 | フレームワーク | .NET 10.0 |
 | データバインディング | INotifyPropertyChanged |
-| シリアライズ | System.Text.Json |
+| シリアライズ | System.Text.Json + JsonStringEnumConverter |
 | 描画 | DrawingContext / DrawingVisual |
-
----
-
-## 📊 パフォーマンス
-
-### ベンチマーク結果
-
-| クラス数 | 描画時間 | FPS | メモリ使用量 |
-|---------|---------|-----|------------|
-| 20個 | 12ms | 83 | 180KB |
-| 100個 | 45ms | 22 | 890KB |
-| 500個 | 195ms | 5 | 4.6MB |
-
-**テスト環境:** Windows 11, Intel Core i7, 16GB RAM
-
-### .NET 10.0 の改善点
-
-- 起動速度: **20%高速化**（vs .NET Framework 4.8）
-- メモリ使用量: **30%削減**
-- JSON処理: **35%高速化**（vs .NET 6.0）
-- GC pause: **50%短縮**
 
 ---
 
@@ -304,57 +269,11 @@ ClassDiagramEditor/
 - ズームレベルを下げる
 - 不要な関係を削除
 
----
-
-## 🤝 貢献
-
-プルリクエスト歓迎！
-
-### 開発環境のセットアップ
-
-1. リポジトリをフォーク
-2. フィーチャーブランチを作成
-   ```bash
-   git checkout -b feature/amazing-feature
-   ```
-3. 変更をコミット
-   ```bash
-   git commit -m 'Add amazing feature'
-   ```
-4. ブランチにプッシュ
-   ```bash
-   git push origin feature/amazing-feature
-   ```
-5. プルリクエストを作成
-
-### コーディング規約
-
-- C# 13の機能を積極的に使用
-- ファイルスコープ名前空間を使用
-- Primary Constructorsを推奨
-- Collection expressions `[]` を使用
-- コメントは日本語でOK
-
----
-
-## 📄 ライセンス
-
-MIT License - 詳細は [LICENSE](LICENSE) を参照
-
----
 
 ## 👤 作者
 
-**Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
-- Email: your.email@example.com
-
----
-
-## 🙏 謝辞
-
-- [.NET Team](https://github.com/dotnet) - 素晴らしいフレームワーク
-- WPFコミュニティ - 豊富なリソースとサポート
+**W3WIGURIDO**
+- GitHub: [W3WIGURIDO](https://github.com/W3WIGURIDO)
 
 ---
 
@@ -362,12 +281,15 @@ MIT License - 詳細は [LICENSE](LICENSE) を参照
 
 ### v1.0.0 (2026-XX-XX)
 - 🎉 初回リリース
-- ✅ 基本的なクラス図作成機能
-- ✅ Undo/Redo
-- ✅ ファイル保存/読み込み
-- ✅ PNG/SVGエクスポート
+- ✅ 基本的なクラス図作成機能（クラス・インターフェース・抽象クラス）
+- ✅ 6種類の関係（継承・実装・関連・依存・集約・合成）
+- ✅ 属性・メソッドの追加・編集・削除（パラメータ編集含む）
+- ✅ 関係ラベルのインライン編集
+- ✅ 複数選択・一括移動・矩形選択
+- ✅ Undo/Redo（無制限）
+- ✅ ファイル保存/読み込み（.cdf / JSON）
+- ✅ PNG・SVG・クリップボードエクスポート
+- ✅ 中ボタンパン
 - ✅ .NET 10.0 Self-contained
 
 ---
-
-**⭐ このプロジェクトが役立ったら、GitHubでスターをお願いします！**
