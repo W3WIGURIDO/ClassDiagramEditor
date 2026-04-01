@@ -48,6 +48,11 @@ public class DiagramCanvas : Canvas
 
     private readonly Dictionary<Guid, ClassBoxVisual> _classVisuals = [];
 
+    // [2026-04-01 追加] 関係ラベルインライン編集用フィールド
+    private TextBox? _labelEditBox;
+    private RelationModel? _editingRelation;
+    private string _labelEditOriginal = string.Empty;
+
     public DiagramCanvas()
     {
         // [2026-03-25 修正] BackgroundをTransparentにして背景レイヤーのGridBackgroundを透過表示させる
@@ -61,6 +66,8 @@ public class DiagramCanvas : Canvas
         // [2026-03-25 追加] 中ボタンパン操作のイベント登録
         MouseDown += OnMouseDown;
         MouseUp += OnMouseUp;
+        // コンストラクタ登録
+        MouseDown += OnMouseDown_DoubleClick;
     }
 
     // [2026-03-24 修正] Diagramプロパティ変更時の再初期化に対応するためViewModelのPropertyChangedを購読
@@ -667,6 +674,7 @@ public class DiagramCanvas : Canvas
         }
     }
 
+    // [2026-04-01 修正] ラベル関連メニューをイベントでMainWindowに委譲する形に変更
     private void OnMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (_viewModel == null) return;
@@ -676,24 +684,14 @@ public class DiagramCanvas : Canvas
 
         if (clickedRelation != null)
         {
-            // コンテキストメニューを作成
-            var contextMenu = new ContextMenu();
-
-            var deleteMenuItem = new MenuItem
-            {
-                Header = "🗑️ この関係を削除",
-                FontSize = 13
-            };
-            deleteMenuItem.Click += (s, args) =>
-            {
-                _viewModel.RemoveRelation(clickedRelation);
-            };
-
-            contextMenu.Items.Add(deleteMenuItem);
-            contextMenu.IsOpen = true;
-            contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+            // MainWindow側でメニューを構築できるようイベントを発火
+            RelationRightClicked?.Invoke(this, clickedRelation);
+            e.Handled = true;
         }
     }
+
+    // [2026-04-01 追加] 関係線右クリック時にMainWindowへ通知するイベント
+    public event EventHandler<RelationModel>? RelationRightClicked;
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
@@ -1001,6 +999,130 @@ public class DiagramCanvas : Canvas
         Cursor = Cursors.Arrow;
         ReleaseMouseCapture();
         e.Handled = true;
+    }
+
+    // [2026-04-01 追加] MouseDownのClickCount==2でダブルクリックを検出する専用ハンドラ
+    // Canvasは Control を継承しないため MouseDoubleClick イベントが存在しない。
+    // MouseDown は UIElement レベルで ClickCount を持つため代替として使用する。
+    private void OnMouseDown_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+        if (e.ClickCount != 2) return;
+        if (_viewModel == null) return;
+
+        var clickPoint = e.GetPosition(this);
+        var relation = GetRelationAtPoint(clickPoint);
+        if (relation == null) return;
+
+        StartLabelEdit(relation);
+        e.Handled = true;
+    }
+
+    // [2026-04-01 追加] ラベル編集用TextBoxを線の中央に生成して表示する
+    public void StartLabelEdit(RelationModel relation)
+    {
+        if (_viewModel == null) return;
+
+        // 既存の編集中TextBoxがあれば先に確定する
+        CommitLabelEdit();
+
+        var src = _viewModel.Diagram.Classes.FirstOrDefault(c => c.Id == relation.SourceClassId);
+        var tgt = _viewModel.Diagram.Classes.FirstOrDefault(c => c.Id == relation.TargetClassId);
+        if (src == null || tgt == null) return;
+
+        if (!_classVisuals.TryGetValue(src.Id, out var sv) ||
+            !_classVisuals.TryGetValue(tgt.Id, out var tv)) return;
+
+        var sc = new Point(src.Position.X + sv.Width / 2, src.Position.Y + sv.Height / 2);
+        var tc = new Point(tgt.Position.X + tv.Width / 2, tgt.Position.Y + tv.Height / 2);
+        var sp = GetConnectionPoint(src.Position, sv.Width, sv.Height, sc, tc);
+        var tp = GetConnectionPoint(tgt.Position, tv.Width, tv.Height, tc, sc);
+
+        // TextBoxを線の中央に配置
+        double cx = (sp.X + tp.X) / 2;
+        double cy = (sp.Y + tp.Y) / 2;
+
+        _editingRelation = relation;
+        _labelEditOriginal = relation.Label;
+
+        _labelEditBox = new TextBox
+        {
+            Text = relation.Label,
+            Width = 160,
+            Height = 26,
+            FontSize = 12,
+            FontFamily = new FontFamily("Segoe UI"),
+            Padding = new Thickness(4, 2, 4, 2),
+            BorderBrush = Brushes.DodgerBlue,
+            BorderThickness = new Thickness(2),
+            Background = Brushes.White,
+        };
+
+        SetLeft(_labelEditBox, cx - _labelEditBox.Width / 2);
+        SetTop(_labelEditBox, cy - _labelEditBox.Height / 2);
+
+        _labelEditBox.KeyDown += LabelEditBox_KeyDown;
+        _labelEditBox.LostFocus += LabelEditBox_LostFocus;
+
+        Children.Add(_labelEditBox);
+        _labelEditBox.Focus();
+        _labelEditBox.SelectAll();
+    }
+
+    // [2026-04-01 追加] Enter→確定、Escape→キャンセル
+    private void LabelEditBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Return)
+        {
+            CommitLabelEdit();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            CancelLabelEdit();
+            e.Handled = true;
+        }
+    }
+
+    // [2026-04-01 追加] フォーカスアウトで確定
+    private void LabelEditBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        CommitLabelEdit();
+    }
+
+    // [2026-04-01 追加] 編集を確定してコマンドに積む
+    private void CommitLabelEdit()
+    {
+        if (_labelEditBox == null || _editingRelation == null) return;
+
+        var newLabel = _labelEditBox.Text.Trim();
+        var oldLabel = _labelEditOriginal;
+        var relation = _editingRelation;
+
+        RemoveLabelEditBox();
+        _editingRelation = null;
+
+        _viewModel?.EditRelationLabel(relation, oldLabel, newLabel);
+        InvalidateVisual();
+    }
+
+    // [2026-04-01 追加] 編集をキャンセルして元の状態に戻す
+    private void CancelLabelEdit()
+    {
+        if (_labelEditBox == null) return;
+        RemoveLabelEditBox();
+        _editingRelation = null;
+        InvalidateVisual();
+    }
+
+    // [2026-04-01 追加] TextBoxをCanvasから除去してフィールドをクリアする
+    private void RemoveLabelEditBox()
+    {
+        if (_labelEditBox == null) return;
+        _labelEditBox.KeyDown -= LabelEditBox_KeyDown;
+        _labelEditBox.LostFocus -= LabelEditBox_LostFocus;
+        Children.Remove(_labelEditBox);
+        _labelEditBox = null;
     }
 
     // [2026-03-25 追加] エクスポート時に背景・グリッドを一時的に非表示にするメソッド群

@@ -507,6 +507,7 @@ public class ExportService
             string strokeDash = isDashed ? """ stroke-dasharray="6,4" """ : " ";
             string stroke = "black";
 
+            // [2026-04-01 修正] ラベル描画をswitchの外に共通化して追加
             switch (rel.Type)
             {
                 case RelationType.Inheritance:
@@ -520,14 +521,19 @@ public class ExportService
                     sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5"/>""");
                     break;
                 case RelationType.Aggregation:
-                    // [2026-03-27 修正] WPFのDrawArrowHeadはダイヤをTarget側(end)に描画しているため
-                    // SVGもmarker-end（x2側=Target側）にダイヤを置く。refX=0で左尖りがx2点に接する
                     sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5" marker-end="url(#diamondOpen)"/>""");
                     break;
                 case RelationType.Composition:
-                    // [2026-03-27 修正] 同上。合成は黒塗りダイヤをTarget側に配置
                     sb.AppendLine($"""  <line x1="{x1:F1}" y1="{y1:F1}" x2="{x2:F1}" y2="{y2:F1}" stroke="{stroke}" stroke-width="1.5" marker-end="url(#diamondFilled)"/>""");
                     break;
+            }
+
+            // [2026-04-01 追加] 関係線ラベルをSVGに出力する
+            if (!string.IsNullOrEmpty(rel.Label))
+            {
+                double lx = (x1 + x2) / 2;
+                double ly = (y1 + y2) / 2 - 6;
+                sb.AppendLine($"""  <text x="{lx:F1}" y="{ly:F1}" font-family="Segoe UI" font-size="12" text-anchor="middle">{SvgEscape(rel.Label)}</text>""");
             }
         }
 

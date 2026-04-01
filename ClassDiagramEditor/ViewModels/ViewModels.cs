@@ -663,6 +663,18 @@ public class MainViewModel : ViewModelBase
         StatusMessage = message;
     }
 
+    // [2026-04-01 追加] 関係ラベルを編集してUndo/Redoスタックに積む
+    public void EditRelationLabel(RelationModel relation, string oldLabel, string newLabel)
+    {
+        if (oldLabel == newLabel) return;
+        var command = new EditRelationLabelCommand(relation, oldLabel, newLabel);
+        _commandManager.ExecuteCommand(command);
+        _diagram.MarkAsModified();
+        StatusMessage = string.IsNullOrEmpty(newLabel)
+            ? "ラベルを削除しました"
+            : $"ラベルを '{newLabel}' に設定しました";
+    }
+
     public event EventHandler<RelationType>? RelationModeRequested;
 
     #endregion

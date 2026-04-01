@@ -61,6 +61,8 @@ public partial class MainWindow : Window
                 DiagramCanvas.InvalidateVisual();
 
             _viewModel.ExportRequested += ViewModel_ExportRequested;
+            // [2026-04-01 追加] 関係線右クリックイベントを購読してコンテキストメニューを構築する
+            DiagramCanvas.RelationRightClicked += DiagramCanvas_RelationRightClicked;
         }
     }
 
@@ -122,6 +124,59 @@ public partial class MainWindow : Window
                     transparent: true);
                 break;
         }
+    }
+
+    // [2026-04-01 追加] 関係線右クリック時のコンテキストメニューを構築して表示する
+    private void DiagramCanvas_RelationRightClicked(object? sender, ClassDiagramEditor.Models.RelationModel relation)
+    {
+        if (_viewModel == null) return;
+
+        var contextMenu = new ContextMenu();
+
+        // 関係線削除
+        var deleteRelationMenuItem = new MenuItem
+        {
+            Header = "🗑️ この関係を削除",
+            FontSize = 13
+        };
+        deleteRelationMenuItem.Click += (s, args) =>
+        {
+            _viewModel.RemoveRelation(relation);
+        };
+        contextMenu.Items.Add(deleteRelationMenuItem);
+
+        contextMenu.Items.Add(new Separator());
+
+        // [2026-04-01 追加] ラベル追加・編集
+        var labelEditMenuItem = new MenuItem
+        {
+            Header = string.IsNullOrEmpty(relation.Label)
+                ? "🏷️ ラベルを追加"
+                : "🏷️ ラベルを編集",
+            FontSize = 13
+        };
+        labelEditMenuItem.Click += (s, args) =>
+        {
+            DiagramCanvas.StartLabelEdit(relation);
+        };
+        contextMenu.Items.Add(labelEditMenuItem);
+
+        // [2026-04-01 追加] ラベル削除（ラベルがある場合のみ有効）
+        var deleteLabelMenuItem = new MenuItem
+        {
+            Header = "🏷️ ラベルを削除",
+            FontSize = 13,
+            IsEnabled = !string.IsNullOrEmpty(relation.Label)
+        };
+        deleteLabelMenuItem.Click += (s, args) =>
+        {
+            _viewModel.EditRelationLabel(relation, relation.Label, string.Empty);
+            DiagramCanvas.InvalidateVisual();
+        };
+        contextMenu.Items.Add(deleteLabelMenuItem);
+
+        contextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        contextMenu.IsOpen = true;
     }
 
     private void AddAttribute_Click(object sender, RoutedEventArgs e)

@@ -215,6 +215,29 @@ public class RemoveRelationCommand(DiagramModel diagram, RelationModel relation)
     }
 }
 
+/// <summary>
+/// 関係ラベル編集コマンド
+/// </summary>
+// [2026-04-01 追加] 関係線ラベルのUndo/Redo対応コマンド
+public class EditRelationLabelCommand(RelationModel relation, string oldLabel, string newLabel) : IDiagramCommand
+{
+    private readonly RelationModel _relation = relation;
+    private readonly string _oldLabel = oldLabel;
+    private readonly string _newLabel = newLabel;
+
+    public string Description => $"Edit relation label '{_oldLabel}' → '{_newLabel}'";
+
+    public void Execute()
+    {
+        _relation.Label = _newLabel;
+    }
+
+    public void Undo()
+    {
+        _relation.Label = _oldLabel;
+    }
+}
+
 
 /// <summary>
 /// 複数クラス移動コマンド
