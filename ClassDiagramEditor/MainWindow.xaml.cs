@@ -350,4 +350,17 @@ public partial class MainWindow : Window
             GridBackground.Visibility = Visibility.Visible;
         }
     }
+
+    // [2026-04-06 追加] Ctrl+ホイールでズーム。Ctrlなしは通常スクロールに委譲
+    private void DiagramScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+
+        e.Handled = true;
+
+        if (e.Delta > 0)
+            _viewModel?.ZoomInCommand.Execute(null);
+        else
+            _viewModel?.ZoomOutCommand.Execute(null);
+    }
 }

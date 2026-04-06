@@ -203,7 +203,8 @@
             <!-- 中央パネル: キャンバス -->
             <Border Grid.Column="1" Background="#FAFAFA">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" 
-                  VerticalScrollBarVisibility="Auto">
+              VerticalScrollBarVisibility="Auto"
+              PreviewMouseWheel="DiagramScrollViewer_PreviewMouseWheel">
                     <Grid>
                         <Grid.LayoutTransform>
                             <ScaleTransform ScaleX="{Binding ZoomLevel}" ScaleY="{Binding ZoomLevel}"/>
